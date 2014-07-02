@@ -125,8 +125,8 @@ class SCPO_Engine {
 		if ( $this->_check_load_script_css() ) { 
 			wp_enqueue_script( 'jQuery' );
 			wp_enqueue_script( 'jquery-ui-sortable' );
-			wp_enqueue_script( 'scporderjs', SCPO_URL . '/assets/scporder.js', array( 'jquery' ), null, true ); 
-			wp_enqueue_style( 'scporder', SCPO_URL . '/assets/scporder.css', array( ), null );
+			wp_enqueue_script( 'scporderjs', SCPO_URL . '/scporder.js', array( 'jquery' ), null, true ); 
+			wp_enqueue_style( 'scporder', SCPO_URL . '/scporder.css', array( ), null );
 		}
 	}
 
