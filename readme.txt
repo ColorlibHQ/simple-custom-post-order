@@ -1,9 +1,9 @@
 === Simple Custom Post Order ===
 Contributors: hsameerc
 Tags: custom post order, post order, js post order, page order, posts order, category order, sort posts, sort pages, sort custom posts
-Requires at least: 3.0.0
-Tested up to: 3.8
-Stable tag: 3.8
+Requires at least: 3.5.1
+Tested up to: 4.1.1
+Stable tag: 4.1.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -51,3 +51,6 @@ An answer to that question.
 * It does not depend on the designation manner of arguments( Parameters ). ( $args = 'orderby=&order=' or $args = array( 'orderby' => '', 'order' => '' ) )
 * Previous Versions Issues were Improved.
 * Removed Taxonomy Sort( Will add in next Version :) )
+
+= Version 2.3 (24-03-2014) =
+* Fixed major bug on taxonomy and post order 
