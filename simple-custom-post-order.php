@@ -349,7 +349,7 @@ class SCPO_Engine {
         $objects = $this->get_scporder_options_objects();
         if (empty($objects))
             return false;
-        if (is_admin()) {
+        if (is_admin() && ! wp_doing_ajax()) {
 
             if (isset($wp_query->query['post_type']) && !isset($_GET['orderby'])) {
                 if (in_array($wp_query->query['post_type'], $objects)) {
