@@ -300,7 +300,7 @@ class SCPO_Engine {
 
         if (isset($post->post_type) && in_array($post->post_type, $objects)) {
             $current_menu_order = $post->menu_order;
-            $where = "WHERE p.menu_order > '" . $current_menu_order . "' AND p.post_type = '" . $post->post_type . "' AND p.post_status = 'publish'";
+            $where = preg_replace("/p.post_date < \'[0-9\-\s\:]+\'/i", "p.menu_order > '" . $current_menu_order . "'", $where);
         }
         return $where;
     }
@@ -327,7 +327,7 @@ class SCPO_Engine {
 
         if (isset($post->post_type) && in_array($post->post_type, $objects)) {
             $current_menu_order = $post->menu_order;
-            $where = "WHERE p.menu_order < '" . $current_menu_order . "' AND p.post_type = '" . $post->post_type . "' AND p.post_status = 'publish'";
+            $where = preg_replace("/p.post_date > \'[0-9\-\s\:]+\'/i", "p.menu_order < '" . $current_menu_order . "'", $where);
         }
         return $where;
     }
