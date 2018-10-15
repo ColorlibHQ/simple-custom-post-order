@@ -5,7 +5,6 @@ $scporder_tags = isset($scporder_options['tags']) ? $scporder_options['tags'] : 
 ?>
 
 <div class="wrap">
-    <?php screen_icon('plugins'); ?>
     <h2><?php _e('Simple Custom Post Order Settings', 'scporder'); ?></h2>
     <?php if (isset($_GET['msg'])) : ?>
         <div id="message" class="updated below-h2">
