@@ -4,7 +4,7 @@
   Plugin Name: Simple Custom Post Order
   Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
   Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
-  Version: 2.3.4
+  Version: 2.3.5
   Author: Colorlib
   Author URI: https://colorlib.com/wp/
  */
@@ -299,9 +299,8 @@ class SCPO_Engine {
             return $where;
 
         if (isset($post->post_type) && in_array($post->post_type, $objects)) {
-            $current_menu_order = $post->menu_order;
-            $where = "WHERE p.menu_order > '" . $current_menu_order . "' AND p.post_type = '" . $post->post_type . "' AND p.post_status = 'publish'";
-        }
+			$where = preg_replace("/p.post_date < \'[0-9\-\s\:]+\'/i", "p.menu_order > '" . $post->menu_order . "'", $where);
+		}
         return $where;
     }
 
@@ -326,9 +325,8 @@ class SCPO_Engine {
             return $where;
 
         if (isset($post->post_type) && in_array($post->post_type, $objects)) {
-            $current_menu_order = $post->menu_order;
-            $where = "WHERE p.menu_order < '" . $current_menu_order . "' AND p.post_type = '" . $post->post_type . "' AND p.post_status = 'publish'";
-        }
+            $where = preg_replace("/p.post_date > \'[0-9\-\s\:]+\'/i", "p.menu_order < '" . $post->menu_order . "'", $where);
+		}
         return $where;
     }
 
