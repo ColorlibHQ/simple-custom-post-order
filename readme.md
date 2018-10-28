@@ -59,3 +59,6 @@ An answer to that question.
 
 = Version 2.3.2 (17-03-2017) =
 * Minor documentation and readme tweaks
+
+= Version 2.3.4 =
+* Removed deprecated function "screen_icon"
