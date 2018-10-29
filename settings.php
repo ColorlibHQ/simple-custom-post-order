@@ -23,7 +23,7 @@ $scporder_tags = isset($scporder_options['tags']) ? $scporder_options['tags'] : 
             <table class="form-table">
                 <tbody>
                     <tr valign="top">
-                        <th scope="row"><?php _e('Check to Sort Post Types', 'scporder') ?></th> 
+                        <th scope="row"><?php _e('Check to Sort Post Types', 'scporder') ?></th>
                         <td>
                             <label><input type="checkbox" id="scporder_allcheck_objects"> <?php _e('Check All', 'scporder') ?></label><br>
                             <?php
@@ -58,7 +58,7 @@ $scporder_tags = isset($scporder_options['tags']) ? $scporder_options['tags'] : 
             <table class="form-table">
                 <tbody>
                     <tr valign="top">
-                        <th scope="row"><?php _e('Check to Sort Taxonomies', 'scporder') ?></th> 
+                        <th scope="row"><?php _e('Check to Sort Taxonomies', 'scporder') ?></th>
                         <td>
                             <label><input type="checkbox" id="scporder_allcheck_tags"> <?php _e('Check All', 'scporder') ?></label><br>
                             <?php
@@ -85,25 +85,14 @@ $scporder_tags = isset($scporder_options['tags']) ? $scporder_options['tags'] : 
                 </tbody>
             </table>
 
-        </div> 
+        </div>
         <p class="submit">
             <input type="submit" class="button-primary" name="scporder_submit" value="<?php _e('Update', 'scporder'); ?>">
         </p>
 
     </form>
-    <h3>Buy me a Coffee to keep me awake :)</h3>
-    <form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank">
-        <input type="hidden" name="cmd" value="_donations">
-        <input type="hidden" name="business" value="humagainsameer@gmail.com">
-        <input type="hidden" name="lc" value="US">
-        <input type="hidden" name="item_name" value="Sameer Humagain">
-        <input type="hidden" name="amount" value="10.00">
-        <input type="hidden" name="currency_code" value="USD">
-        <input type="hidden" name="no_note" value="0">
-        <input type="hidden" name="bn" value="PP-DonationsBF:btn_donateCC_LG.gif:NonHostedGuest">
-        <input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal - The safer, easier way to pay online!">
-        <img alt="" border="0" src="https://www.paypalobjects.com/en_US/i/scr/pixel.gif" width="1" height="1">
-    </form>
+    <h3>Like this simple plugin?</h3>
+    <p>Make sure to <a href="https://wordpress.org/support/plugin/simple-custom-post-order/reviews/?filter=5"><strong>rate it</strong></a> and visit us at <a href="https://colorlib.com/wp/"><strong>Colorlib.com</strong></a></p>
 
 
 </div>
