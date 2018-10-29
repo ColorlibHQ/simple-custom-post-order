@@ -2,17 +2,17 @@
 
 /*
   Plugin Name: Simple Custom Post Order
-  Plugin URI: http://hsameer.com.np/simple-custom-post-order/
+  Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
   Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
-  Version: 2.3
-  Author: Sameer Humagain
-  Author URI: http://hsameer.com.np/
+  Version: 2.3.4
+  Author: Colorlib
+  Author URI: https://colorlib.com/wp/
  */
 
 
 define('SCPORDER_URL', plugins_url('', __FILE__));
 define('SCPORDER_DIR', plugin_dir_path(__FILE__));
- 
+
 $scporder = new SCPO_Engine();
 
 class SCPO_Engine {
@@ -109,17 +109,17 @@ class SCPO_Engine {
         if (!empty($objects)) {
             foreach ($objects as $object) {
                 $result = $wpdb->get_results("
-					SELECT count(*) as cnt, max(menu_order) as max, min(menu_order) as min 
-					FROM $wpdb->posts 
+					SELECT count(*) as cnt, max(menu_order) as max, min(menu_order) as min
+					FROM $wpdb->posts
 					WHERE post_type = '" . $object . "' AND post_status IN ('publish', 'pending', 'draft', 'private', 'future')
 				");
                 if ($result[0]->cnt == 0 || $result[0]->cnt == $result[0]->max)
                     continue;
 
                 $results = $wpdb->get_results("
-					SELECT ID 
-					FROM $wpdb->posts 
-					WHERE post_type = '" . $object . "' AND post_status IN ('publish', 'pending', 'draft', 'private', 'future') 
+					SELECT ID
+					FROM $wpdb->posts
+					WHERE post_type = '" . $object . "' AND post_status IN ('publish', 'pending', 'draft', 'private', 'future')
 					ORDER BY menu_order ASC
 				");
                 foreach ($results as $key => $result) {
@@ -131,19 +131,19 @@ class SCPO_Engine {
         if (!empty($tags)) {
             foreach ($tags as $taxonomy) {
                 $result = $wpdb->get_results("
-					SELECT count(*) as cnt, max(term_order) as max, min(term_order) as min 
-					FROM $wpdb->terms AS terms 
-					INNER JOIN $wpdb->term_taxonomy AS term_taxonomy ON ( terms.term_id = term_taxonomy.term_id ) 
+					SELECT count(*) as cnt, max(term_order) as max, min(term_order) as min
+					FROM $wpdb->terms AS terms
+					INNER JOIN $wpdb->term_taxonomy AS term_taxonomy ON ( terms.term_id = term_taxonomy.term_id )
 					WHERE term_taxonomy.taxonomy = '" . $taxonomy . "'
 				");
                 if ($result[0]->cnt == 0 || $result[0]->cnt == $result[0]->max)
                     continue;
 
                 $results = $wpdb->get_results("
-					SELECT terms.term_id 
-					FROM $wpdb->terms AS terms 
-					INNER JOIN $wpdb->term_taxonomy AS term_taxonomy ON ( terms.term_id = term_taxonomy.term_id ) 
-					WHERE term_taxonomy.taxonomy = '" . $taxonomy . "' 
+					SELECT terms.term_id
+					FROM $wpdb->terms AS terms
+					INNER JOIN $wpdb->term_taxonomy AS term_taxonomy ON ( terms.term_id = term_taxonomy.term_id )
+					WHERE term_taxonomy.taxonomy = '" . $taxonomy . "'
 					ORDER BY term_order ASC
 				");
                 foreach ($results as $key => $result) {
@@ -236,8 +236,8 @@ class SCPO_Engine {
         if (!empty($objects)) {
             foreach ($objects as $object) {
                 $result = $wpdb->get_results("
-					SELECT count(*) as cnt, max(menu_order) as max, min(menu_order) as min 
-					FROM $wpdb->posts 
+					SELECT count(*) as cnt, max(menu_order) as max, min(menu_order) as min
+					FROM $wpdb->posts
 					WHERE post_type = '" . $object . "' AND post_status IN ('publish', 'pending', 'draft', 'private', 'future')
 				");
                 if ($result[0]->cnt == 0 || $result[0]->cnt == $result[0]->max)
@@ -245,16 +245,16 @@ class SCPO_Engine {
 
                 if ($object == 'page') {
                     $results = $wpdb->get_results("
-						SELECT ID 
-						FROM $wpdb->posts 
-						WHERE post_type = '" . $object . "' AND post_status IN ('publish', 'pending', 'draft', 'private', 'future') 
+						SELECT ID
+						FROM $wpdb->posts
+						WHERE post_type = '" . $object . "' AND post_status IN ('publish', 'pending', 'draft', 'private', 'future')
 						ORDER BY post_title ASC
 					");
                 } else {
                     $results = $wpdb->get_results("
-						SELECT ID 
-						FROM $wpdb->posts 
-						WHERE post_type = '" . $object . "' AND post_status IN ('publish', 'pending', 'draft', 'private', 'future') 
+						SELECT ID
+						FROM $wpdb->posts
+						WHERE post_type = '" . $object . "' AND post_status IN ('publish', 'pending', 'draft', 'private', 'future')
 						ORDER BY post_date DESC
 					");
                 }
@@ -267,19 +267,19 @@ class SCPO_Engine {
         if (!empty($tags)) {
             foreach ($tags as $taxonomy) {
                 $result = $wpdb->get_results("
-					SELECT count(*) as cnt, max(term_order) as max, min(term_order) as min 
-					FROM $wpdb->terms AS terms 
-					INNER JOIN $wpdb->term_taxonomy AS term_taxonomy ON ( terms.term_id = term_taxonomy.term_id ) 
+					SELECT count(*) as cnt, max(term_order) as max, min(term_order) as min
+					FROM $wpdb->terms AS terms
+					INNER JOIN $wpdb->term_taxonomy AS term_taxonomy ON ( terms.term_id = term_taxonomy.term_id )
 					WHERE term_taxonomy.taxonomy = '" . $taxonomy . "'
 				");
                 if ($result[0]->cnt == 0 || $result[0]->cnt == $result[0]->max)
                     continue;
 
                 $results = $wpdb->get_results("
-					SELECT terms.term_id 
-					FROM $wpdb->terms AS terms 
-					INNER JOIN $wpdb->term_taxonomy AS term_taxonomy ON ( terms.term_id = term_taxonomy.term_id ) 
-					WHERE term_taxonomy.taxonomy = '" . $taxonomy . "' 
+					SELECT terms.term_id
+					FROM $wpdb->terms AS terms
+					INNER JOIN $wpdb->term_taxonomy AS term_taxonomy ON ( terms.term_id = term_taxonomy.term_id )
+					WHERE term_taxonomy.taxonomy = '" . $taxonomy . "'
 					ORDER BY name ASC
 				");
                 foreach ($results as $key => $result) {
