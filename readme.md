@@ -3,7 +3,7 @@ Contributors: colorlibplugins, silkalns
 Tags: custom post order, post order, js post order, page order, posts order, category order, sort posts, sort pages, sort custom posts
 Requires at least: 3.5.1
 Tested up to: 5.0.0
-Stable tag: 2.3.5
+Stable tag: 2.3.6
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -34,6 +34,9 @@ An answer to that question.
 3. Settings
 
 == Changelog ==
+
+= Version 2.3.6 =
+* Added notice to select post type or taxonomy for the plugin to work
 
 = Version 2.3.5 =
 * Fixed https://github.com/ColorlibHQ/simple-custom-post-order/issues/12
