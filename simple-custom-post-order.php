@@ -510,5 +510,3 @@ function scporder_uninstall_db() {
     }
     delete_option('scporder_install');
 }
-
-?>
