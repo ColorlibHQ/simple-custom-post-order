@@ -61,7 +61,7 @@ class SCPO_Engine {
 
             <h1><?php esc_html_e( 'Simple Custom Post Order', 'scporder' ); ?></h1>
 
-            <p><?php esc_html_e( 'Thank you for installing our awesome plugin, in order to enabled it you need to go to the settings page and select which custom post or taxonomy you want to order.', 'scporder' ); ?></p>
+            <p><?php esc_html_e( 'Thank you for installing our awesome plugin, in order to enable it you need to go to the settings page and select which custom post or taxonomy you want to order.', 'scporder' ); ?></p>
 
             <p><a href="<?php echo admin_url( 'options-general.php?page=scporder-settings' ) ?>" class="button button-primary button-hero"><?php esc_html_e( 'Get started !', 'scporder' ); ?></a></p>
         </div>
