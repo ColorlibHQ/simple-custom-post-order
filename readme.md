@@ -3,7 +3,7 @@ Contributors: colorlibplugins, silkalns
 Tags: custom post order, post order, js post order, page order, posts order, category order, sort posts, sort pages, sort custom posts
 Requires at least: 3.5.1
 Tested up to: 5.0.0
-Stable tag: 2.3.4
+Stable tag: 2.3.6
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -14,7 +14,7 @@ Order posts(posts, any custom post types) using a Drag and Drop Sortable JavaScr
 Order posts(posts, any custom post types) using a Drag and Drop Sortable JavaScript. Configuration is unnecessary. You can do directly on default WordPress administration.
 Excluding custom query which uses order or orderby parameters, in get_posts or query_posts and so on.
 
-This plugins is now supported and maintained by <a href=“https://colorlib.com/wp/“ target=“_blank”>Colorlib</a>.
+This plugins is now supported and maintained by <a href="https://colorlib.com/wp/" target="_blank">Colorlib</a>.
 
 == Installation ==
 
@@ -29,24 +29,26 @@ An answer to that question.
 
 == Screenshots ==
 
-1. screenshot-1
-2. screenshot-2
+1. Order Custom Posts
+2. Order Posts
+3. Settings
 
 == Changelog ==
-= Version 1.0 (20-07-2013) =
-*  Initial release.
 
-= Version 1.5 (25-07-2013) =
-*  Fix : fix errors
-*  Added Taxonomy Sort
-*  Added Taxonomy Sort option In setting Page
+= Version 2.3.6 =
+Fixed https://github.com/ColorlibHQ/simple-custom-post-order/issues/3
 
-= Version 2.0 (22-11-2013) =
-* Fixed Undefined Notice Error in wp version 3.7.1
-* Taxonomy Activate Checkbox removed.
+= Version 2.3.5 =
+* Fixed https://github.com/ColorlibHQ/simple-custom-post-order/issues/12
 
-= Version 2.1 (31-12-2013) =
-* Prevent Breaking autocomplete
+= Version 2.3.4 =
+* Removed deprecated function "screen_icon"
+
+= Version 2.3.2 (17-03-2017) =
+* Minor documentation and readme tweaks
+
+= Version 2.3 (24-03-2014) =
+* Fixed major bug on taxonomy and post order
 
 = Version 2.2 (02-07-2014) =
 * Fixed bug: Custom Query which uses 'order' or 'orderby' parameters is preferred
@@ -54,11 +56,17 @@ An answer to that question.
 * Previous Versions Issues were Improved.
 * Removed Taxonomy Sort( Will add in next Version :) )
 
-= Version 2.3 (24-03-2014) =
-* Fixed major bug on taxonomy and post order
+= Version 2.1 (31-12-2013) =
+* Prevent Breaking autocomplete
 
-= Version 2.3.2 (17-03-2017) =
-* Minor documentation and readme tweaks
+= Version 2.0 (22-11-2013) =
+* Fixed Undefined Notice Error in wp version 3.7.1
+* Taxonomy Activate Checkbox removed.
 
-= Version 2.3.4 =
-* Removed deprecated function "screen_icon"
+= Version 1.5 (25-07-2013) =
+*  Fix : fix errors
+*  Added Taxonomy Sort
+*  Added Taxonomy Sort option In setting Page
+
+= Version 1.0 (20-07-2013) =
+*  Initial release.
