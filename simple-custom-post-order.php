@@ -4,7 +4,7 @@
   Plugin Name: Simple Custom Post Order
   Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
   Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
-  Version: 2.3.7
+  Version: 2.3.8
   Author: Colorlib
   Author URI: https://colorlib.com/wp/
  */
@@ -41,17 +41,43 @@ class SCPO_Engine {
         add_filter('get_terms_orderby', array($this, 'scporder_get_terms_orderby'), 10, 3);
         add_filter('wp_get_object_terms', array($this, 'scporder_get_object_terms'), 10, 3);
         add_filter('get_terms', array($this, 'scporder_get_object_terms'), 10, 3);
+        
+        add_action( 'admin_notices', array( $this, 'scporder_notice_not_checked' ) );
+        add_action( 'wp_ajax_scporder_dismiss_notices', array( $this, 'dismiss_notices' ) );
 
-        if ( empty( $this->get_scporder_options_objects() ) ){
-            add_action( 'admin_notices', array( $this, 'scporder_notice_not_checked' ) );
+    }
+
+    public function dismiss_notices() {
+
+        if ( ! check_admin_referer( 'scporder_dismiss_notice', 'scporder_nonce' ) ) {
+            wp_die( 'nok' );
         }
+
+        update_option( 'scporder_notice', '1' );
+
+        wp_die( 'ok' );
+
     }
 
     public function scporder_notice_not_checked() {
 
+        $settings = $this->get_scporder_options_objects();
+        if ( ! empty( $settings ) ){
+            return;
+        }
+
         $screen = get_current_screen();
 
-        if ( 'settings_page_scporder-settings' != $screen->id ) {
+        if ( 'settings_page_scporder-settings' == $screen->id ) {
+            return;
+        }
+
+        $dismessed = get_option( 'scporder_notice', false );
+
+        if ( $dismessed ) {
+            return;
+        }
+
         ?>
         <div class="notice scpo-notice" id="scpo-notice">
             <img src="<?php echo esc_url( plugins_url( 'assets/logo.jpg', __FILE__ ) ); ?>" width="80">
@@ -61,6 +87,7 @@ class SCPO_Engine {
             <p><?php esc_html_e( 'Thank you for installing our awesome plugin, in order to enable it you need to go to the settings page and select which custom post or taxonomy you want to order.', 'scporder' ); ?></p>
 
             <p><a href="<?php echo admin_url( 'options-general.php?page=scporder-settings' ) ?>" class="button button-primary button-hero"><?php esc_html_e( 'Get started !', 'scporder' ); ?></a></p>
+            <button type="button" class="notice-dismiss"><span class="screen-reader-text"><?php esc_html_e( 'Dismiss this notice.', 'scporder' ); ?></span></button>
         </div>
 
         <style>
@@ -73,8 +100,31 @@ class SCPO_Engine {
                 position: relative;
             }
         </style>
+        <script>
+            jQuery(document).ready(function(){
+                jQuery( '#scpo-notice .notice-dismiss' ).click(function( evt ){
+                    evt.preventDefault();
+
+                    console.log( 'asdasdas' );
+
+                    var ajaxData = {
+                        'action' : 'scporder_dismiss_notices',
+                        'scporder_nonce' : '<?php echo wp_create_nonce( 'scporder_dismiss_notice' ) ?>'
+                    }
+
+                    jQuery.ajax({
+                        url: "<?php echo admin_url('admin-ajax.php'); ?>",
+                        method: "POST",
+                        data: ajaxData,
+                        dataType: "html"
+                    }).done(function(){
+                        jQuery("#scpo-notice").hide();
+                    });
+
+                });
+            })
+        </script>
         <?php
-        }
     }
 
     public function scporder_install() {
