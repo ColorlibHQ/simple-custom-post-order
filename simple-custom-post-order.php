@@ -43,19 +43,6 @@ class SCPO_Engine {
         add_filter('get_terms', array($this, 'scporder_get_object_terms'), 10, 3);
         
         add_action( 'admin_notices', array( $this, 'scporder_notice_not_checked' ) );
-        add_action( 'wp_ajax_scporder_dismiss_notices', array( $this, 'dismiss_notices' ) );
-
-    }
-
-    public function dismiss_notices() {
-
-        if ( ! check_admin_referer( 'scporder_dismiss_notice', 'scporder_nonce' ) ) {
-            wp_die( 'nok' );
-        }
-
-        update_option( 'scporder_notice', '1' );
-
-        wp_die( 'ok' );
 
     }
 
@@ -87,7 +74,6 @@ class SCPO_Engine {
             <p><?php esc_html_e( 'Thank you for installing our awesome plugin, in order to enable it you need to go to the settings page and select which custom post or taxonomy you want to order.', 'scporder' ); ?></p>
 
             <p><a href="<?php echo admin_url( 'options-general.php?page=scporder-settings' ) ?>" class="button button-primary button-hero"><?php esc_html_e( 'Get started !', 'scporder' ); ?></a></p>
-            <button type="button" class="notice-dismiss"><span class="screen-reader-text"><?php esc_html_e( 'Dismiss this notice.', 'scporder' ); ?></span></button>
         </div>
 
         <style>
@@ -100,30 +86,6 @@ class SCPO_Engine {
                 position: relative;
             }
         </style>
-        <script>
-            jQuery(document).ready(function(){
-                jQuery( '#scpo-notice .notice-dismiss' ).click(function( evt ){
-                    evt.preventDefault();
-
-                    console.log( 'asdasdas' );
-
-                    var ajaxData = {
-                        'action' : 'scporder_dismiss_notices',
-                        'scporder_nonce' : '<?php echo wp_create_nonce( 'scporder_dismiss_notice' ) ?>'
-                    }
-
-                    jQuery.ajax({
-                        url: "<?php echo admin_url('admin-ajax.php'); ?>",
-                        method: "POST",
-                        data: ajaxData,
-                        dataType: "html"
-                    }).done(function(){
-                        jQuery("#scpo-notice").hide();
-                    });
-
-                });
-            })
-        </script>
         <?php
     }
 

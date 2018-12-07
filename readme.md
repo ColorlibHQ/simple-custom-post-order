@@ -37,8 +37,6 @@ An answer to that question.
 
 = Version 2.3.8 =
 * Fixed white screen ( https://wordpress.org/support/topic/white-screen-after-upgrade-to-2-3-6/ )
-* Added option to dismiss the admin notice
-
 
 = Version 2.3.7 =
 * Fixed white screen ( https://wordpress.org/support/topic/white-screen-after-upgrade-to-2-3-6/ )
