@@ -59,12 +59,6 @@ class SCPO_Engine {
             return;
         }
 
-        $dismessed = get_option( 'scporder_notice', false );
-
-        if ( $dismessed ) {
-            return;
-        }
-
         ?>
         <div class="notice scpo-notice" id="scpo-notice">
             <img src="<?php echo esc_url( plugins_url( 'assets/logo.jpg', __FILE__ ) ); ?>" width="80">
