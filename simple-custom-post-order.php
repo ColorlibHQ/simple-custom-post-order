@@ -4,7 +4,7 @@
   Plugin Name: Simple Custom Post Order
   Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
   Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
-  Version: 2.3.9
+  Version: 2.4.0
   Author: Colorlib
   Author URI: https://colorlib.com/wp/
  */
@@ -105,8 +105,6 @@ class SCPO_Engine {
                 jQuery( '#scpo-notice .notice-dismiss' ).click(function( evt ){
                     evt.preventDefault();
 
-                    console.log( 'asdasdas' );
-
                     var ajaxData = {
                         'action' : 'scporder_dismiss_notices',
                         'scporder_nonce' : '<?php echo wp_create_nonce( 'scporder_dismiss_notice' ) ?>'
@@ -197,18 +195,21 @@ class SCPO_Engine {
                     FROM $wpdb->posts
                     WHERE post_type = '" . $object . "' AND post_status IN ('publish', 'pending', 'draft', 'private', 'future')
                 ");
+
                 if ($result[0]->cnt == 0 || $result[0]->cnt == $result[0]->max)
                     continue;
 
-                $results = $wpdb->get_results("
-                    SELECT ID
-                    FROM $wpdb->posts
-                    WHERE post_type = '" . $object . "' AND post_status IN ('publish', 'pending', 'draft', 'private', 'future')
-                    ORDER BY menu_order ASC
-                ");
-                foreach ($results as $key => $result) {
-                    $wpdb->update($wpdb->posts, array('menu_order' => $key + 1), array('ID' => $result->ID));
-                }
+                // Here's the optimization
+                $wpdb->query("SET @row_number = 0;");
+                $wpdb->query("UPDATE $wpdb->posts as pt JOIN (
+                  SELECT ID, (@row_number:=@row_number + 1) AS rank
+                  FROM $wpdb->posts
+                  WHERE post_type = '$object' AND post_status IN ( 'publish', 'pending', 'draft', 'private', 'future' )
+                  ORDER BY menu_order ASC
+                ) as pt2
+                ON pt.id = pt2.id
+                SET pt.menu_order = pt2.rank;");
+
             }
         }
 
