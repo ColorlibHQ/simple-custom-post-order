@@ -5,11 +5,11 @@ $scporder_tags = isset($scporder_options['tags']) ? $scporder_options['tags'] : 
 ?>
 
 <div class="wrap">
-    <h2><?php _e('Simple Custom Post Order Settings', 'scporder'); ?></h2>
+    <h2><?php _e('Simple Custom Post Order Settings', 'simple-custom-post-order'); ?></h2>
     <?php if (isset($_GET['msg'])) : ?>
         <div id="message" class="updated below-h2">
             <?php if ($_GET['msg'] == 'update') : ?>
-                <p><?php _e('Settings Updated.','scporder'); ?></p>
+                <p><?php _e('Settings Updated.','simple-custom-post-order'); ?></p>
             <?php endif; ?>
         </div>
     <?php endif; ?>
@@ -23,9 +23,9 @@ $scporder_tags = isset($scporder_options['tags']) ? $scporder_options['tags'] : 
             <table class="form-table">
                 <tbody>
                     <tr valign="top">
-                        <th scope="row"><?php _e('Check to Sort Post Types', 'scporder') ?></th>
+                        <th scope="row"><?php _e('Check to Sort Post Types', 'simple-custom-post-order') ?></th>
                         <td>
-                            <label><input type="checkbox" id="scporder_allcheck_objects"> <?php _e('Check All', 'scporder') ?></label><br>
+                            <label><input type="checkbox" id="scporder_allcheck_objects"> <?php _e('Check All', 'simple-custom-post-order') ?></label><br>
                             <?php
                             $post_types = get_post_types(array(
                                 'show_ui' => true,
@@ -58,9 +58,9 @@ $scporder_tags = isset($scporder_options['tags']) ? $scporder_options['tags'] : 
             <table class="form-table">
                 <tbody>
                     <tr valign="top">
-                        <th scope="row"><?php _e('Check to Sort Taxonomies', 'scporder') ?></th>
+                        <th scope="row"><?php _e('Check to Sort Taxonomies', 'simple-custom-post-order') ?></th>
                         <td>
-                            <label><input type="checkbox" id="scporder_allcheck_tags"> <?php _e('Check All', 'scporder') ?></label><br>
+                            <label><input type="checkbox" id="scporder_allcheck_tags"> <?php _e('Check All', 'simple-custom-post-order') ?></label><br>
                             <?php
                             $taxonomies = get_taxonomies(array(
                                 'show_ui' => true,
@@ -87,7 +87,7 @@ $scporder_tags = isset($scporder_options['tags']) ? $scporder_options['tags'] : 
 
         </div>
         <p class="submit">
-            <input type="submit" class="button-primary" name="scporder_submit" value="<?php _e('Update', 'scporder'); ?>">
+            <input type="submit" class="button-primary" name="scporder_submit" value="<?php _e('Update', 'simple-custom-post-order'); ?>">
         </p>
 
     </form>
