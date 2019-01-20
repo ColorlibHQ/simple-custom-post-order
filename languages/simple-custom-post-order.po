@@ -1,0 +1,65 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"POT-Creation-Date: 2019-01-20 19:46+0200\n"
+"PO-Revision-Date: 2019-01-20 19:47+0200\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 2.2.1\n"
+"X-Poedit-Basepath: ..\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Poedit-KeywordsList: __;_e;esc_html_e\n"
+"X-Poedit-SearchPath-0: .\n"
+"X-Poedit-SearchPath-1: simple-custom-post-order.php\n"
+"X-Poedit-SearchPath-2: settings.php\n"
+
+#: settings.php:8
+msgid "Simple Custom Post Order Settings"
+msgstr ""
+
+#: settings.php:12
+msgid "Settings Updated."
+msgstr ""
+
+#: settings.php:26
+msgid "Check to Sort Post Types"
+msgstr ""
+
+#: settings.php:28 settings.php:63
+msgid "Check All"
+msgstr ""
+
+#: settings.php:61
+msgid "Check to Sort Taxonomies"
+msgstr ""
+
+#: settings.php:90
+msgid "Update"
+msgstr ""
+
+#: simple-custom-post-order.php:91
+msgid "Simple Custom Post Order"
+msgstr ""
+
+#: simple-custom-post-order.php:93
+msgid ""
+"Thank you for installing our awesome plugin, in order to enable it you need "
+"to go to the settings page and select which custom post or taxonomy you want "
+"to order."
+msgstr ""
+
+#: simple-custom-post-order.php:95
+msgid "Get started !"
+msgstr ""
+
+#: simple-custom-post-order.php:96
+msgid "Dismiss this notice."
+msgstr ""
+
+#: simple-custom-post-order.php:145
+msgid "SCPOrder"
+msgstr ""
