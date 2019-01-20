@@ -4,7 +4,7 @@
   Plugin Name: Simple Custom Post Order
   Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
   Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
-  Version: 2.3.9
+  Version: 2.4.1
   Author: Colorlib
   Author URI: https://colorlib.com/wp/
  */
@@ -45,6 +45,11 @@ class SCPO_Engine {
         add_action( 'admin_notices', array( $this, 'scporder_notice_not_checked' ) );
         add_action( 'wp_ajax_scporder_dismiss_notices', array( $this, 'dismiss_notices' ) );
 
+        add_action( 'plugins_loaded', array( $this, 'load_plugin_textdomain' ) );
+    }
+
+    public function load_plugin_textdomain(){
+        load_plugin_textdomain( 'simple-custom-post-order', false, dirname( __FILE__ ) . '/languages/' );
     }
 
     public function dismiss_notices() {
@@ -82,12 +87,12 @@ class SCPO_Engine {
         <div class="notice scpo-notice" id="scpo-notice">
             <img src="<?php echo esc_url( plugins_url( 'assets/logo.jpg', __FILE__ ) ); ?>" width="80">
 
-            <h1><?php esc_html_e( 'Simple Custom Post Order', 'scporder' ); ?></h1>
+            <h1><?php esc_html_e( 'Simple Custom Post Order', 'simple-custom-post-order' ); ?></h1>
 
-            <p><?php esc_html_e( 'Thank you for installing our awesome plugin, in order to enable it you need to go to the settings page and select which custom post or taxonomy you want to order.', 'scporder' ); ?></p>
+            <p><?php esc_html_e( 'Thank you for installing our awesome plugin, in order to enable it you need to go to the settings page and select which custom post or taxonomy you want to order.', 'simple-custom-post-order' ); ?></p>
 
-            <p><a href="<?php echo admin_url( 'options-general.php?page=scporder-settings' ) ?>" class="button button-primary button-hero"><?php esc_html_e( 'Get started !', 'scporder' ); ?></a></p>
-            <button type="button" class="notice-dismiss"><span class="screen-reader-text"><?php esc_html_e( 'Dismiss this notice.', 'scporder' ); ?></span></button>
+            <p><a href="<?php echo admin_url( 'options-general.php?page=scporder-settings' ) ?>" class="button button-primary button-hero"><?php esc_html_e( 'Get started !', 'simple-custom-post-order' ); ?></a></p>
+            <button type="button" class="notice-dismiss"><span class="screen-reader-text"><?php esc_html_e( 'Dismiss this notice.', 'simple-custom-post-order' ); ?></span></button>
         </div>
 
         <style>
@@ -104,8 +109,6 @@ class SCPO_Engine {
             jQuery(document).ready(function(){
                 jQuery( '#scpo-notice .notice-dismiss' ).click(function( evt ){
                     evt.preventDefault();
-
-                    console.log( 'asdasdas' );
 
                     var ajaxData = {
                         'action' : 'scporder_dismiss_notices',
@@ -138,7 +141,7 @@ class SCPO_Engine {
     }
 
     public function admin_menu() {
-        add_options_page(__('SCPOrder', 'scporder'), __('SCPOrder', 'scporder'), 'manage_options', 'scporder-settings', array($this, 'admin_page'));
+        add_options_page(__('SCPOrder', 'scporder'), __('SCPOrder', 'simple-custom-post-order'), 'manage_options', 'scporder-settings', array($this, 'admin_page'));
     }
 
     public function admin_page() {
@@ -197,18 +200,21 @@ class SCPO_Engine {
                     FROM $wpdb->posts
                     WHERE post_type = '" . $object . "' AND post_status IN ('publish', 'pending', 'draft', 'private', 'future')
                 ");
+
                 if ($result[0]->cnt == 0 || $result[0]->cnt == $result[0]->max)
                     continue;
 
-                $results = $wpdb->get_results("
-                    SELECT ID
-                    FROM $wpdb->posts
-                    WHERE post_type = '" . $object . "' AND post_status IN ('publish', 'pending', 'draft', 'private', 'future')
-                    ORDER BY menu_order ASC
-                ");
-                foreach ($results as $key => $result) {
-                    $wpdb->update($wpdb->posts, array('menu_order' => $key + 1), array('ID' => $result->ID));
-                }
+                // Here's the optimization
+                $wpdb->query("SET @row_number = 0;");
+                $wpdb->query("UPDATE $wpdb->posts as pt JOIN (
+                  SELECT ID, (@row_number:=@row_number + 1) AS rank
+                  FROM $wpdb->posts
+                  WHERE post_type = '$object' AND post_status IN ( 'publish', 'pending', 'draft', 'private', 'future' )
+                  ORDER BY menu_order ASC
+                ) as pt2
+                ON pt.id = pt2.id
+                SET pt.menu_order = pt2.rank;");
+
             }
         }
 
