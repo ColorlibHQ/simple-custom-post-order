@@ -1,15 +1,13 @@
 <?php
-
 /*
-  Plugin Name: Simple Custom Post Order
-  Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
-  Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
-  Version: 2.4.1
-  Author: Colorlib
-  Author URI: https://colorlib.com/wp/
-  
-  Text Domain: simple-custom-post-order
-  Domain Path: /languages/
+ *Plugin Name: Simple Custom Post Order
+ *Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
+ *Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
+ *Version: 2.4.1
+ *Author: Colorlib
+ *Author URI: https://colorlib.com/wp/
+ *Text Domain: simple-custom-post-order
+ *Domain Path: /languages/
  */
 
 
@@ -52,7 +50,7 @@ class SCPO_Engine {
     }
 
     public function load_plugin_textdomain(){
-        load_plugin_textdomain( 'simple-custom-post-order', false, dirname( __FILE__ ) . '/languages/' );
+        load_plugin_textdomain( 'simple-custom-post-order', false, basename( dirname( __FILE__ ) ) . '/languages/' );
     }
 
     public function dismiss_notices() {
