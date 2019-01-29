@@ -7,6 +7,9 @@
   Version: 2.4.1
   Author: Colorlib
   Author URI: https://colorlib.com/wp/
+  
+  Text Domain: simple-custom-post-order
+  Domain Path: /languages/
  */
 
 
@@ -141,7 +144,7 @@ class SCPO_Engine {
     }
 
     public function admin_menu() {
-        add_options_page(__('SCPOrder', 'scporder'), __('SCPOrder', 'simple-custom-post-order'), 'manage_options', 'scporder-settings', array($this, 'admin_page'));
+        add_options_page(__('SCPOrder', 'simple-custom-post-order'), __('SCPOrder', 'simple-custom-post-order'), 'manage_options', 'scporder-settings', array($this, 'admin_page'));
     }
 
     public function admin_page() {
