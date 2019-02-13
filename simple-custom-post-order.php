@@ -1,14 +1,37 @@
 <?php
-/*
- *Plugin Name: Simple Custom Post Order
- *Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
- *Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
- *Version: 2.4.1
- *Author: Colorlib
- *Author URI: https://colorlib.com/wp/
- *Text Domain: simple-custom-post-order
- *Domain Path: /languages/
- */
+/**
+* Plugin Name: Simple Custom Post Order
+* Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
+* Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
+* Version: 2.4.1
+* Author: Colorlib
+* Author URI: https://colorlib.com/
+* Tested up to: 5.0.3
+* Requires: 4.6 or higher
+* License: GPLv3 or later
+* License URI: http://www.gnu.org/licenses/gpl-3.0.html
+* Requires PHP: 5.6
+* Text Domain: simple-custom-post-order
+* Domain Path: /languages
+*
+* Copyright 2013-2017 Sameer Humagain im@hsameer.com.np
+* Copyright 2017-2019 Colorlib support@colorlib.com
+*
+* SVN commit with ownership change: https://plugins.trac.wordpress.org/changeset/1590135/simple-custom-post-order
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License, version 3, as
+* published by the Free Software Foundation.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*/
 
 
 define('SCPORDER_URL', plugins_url('', __FILE__));
