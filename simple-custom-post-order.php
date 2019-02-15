@@ -461,7 +461,7 @@ class SCPO_Engine {
         $objects = $this->get_scporder_options_objects();
         if (empty($objects))
             return false;
-        if (is_admin()) {
+        if (is_admin() && ! wp_doing_ajax()) {
 
             if (isset($wp_query->query['post_type']) && !isset($_GET['orderby'])) {
                 if (in_array($wp_query->query['post_type'], $objects)) {
@@ -503,7 +503,7 @@ class SCPO_Engine {
     }
 
     public function scporder_get_terms_orderby($orderby, $args) {
-        if (is_admin())
+        if (is_admin() && ! wp_doing_ajax())
             return $orderby;
 
         $tags = $this->get_scporder_options_tags();
@@ -522,7 +522,7 @@ class SCPO_Engine {
     public function scporder_get_object_terms($terms) {
         $tags = $this->get_scporder_options_tags();
 
-        if (is_admin() && isset($_GET['orderby']))
+        if (is_admin() && ! wp_doing_ajax() && isset($_GET['orderby']))
             return $terms;
 
         foreach ($terms as $key => $term) {
