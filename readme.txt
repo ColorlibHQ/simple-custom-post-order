@@ -4,7 +4,7 @@ Tags: custom post order, post order, js post order, page order, posts order, cat
 Requires at least: 4.6
 Requires PHP: 5.6
 Tested up to: 5.1
-Stable tag: 2.4.1
+Stable tag: 2.4.2
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -35,6 +35,10 @@ An answer to that question.
 3. Settings
 
 == Changelog ==
+
+= Version 2.4.2 =
+* Fixed potential bug with other plugins
+* Fixed table breaking on re-ordering when Yoast SEO installed
 
 = Version 2.4.1 =
 * Fixed translations
