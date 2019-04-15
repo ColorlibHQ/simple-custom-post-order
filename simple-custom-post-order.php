@@ -590,4 +590,4 @@ function scporder_uninstall_db() {
     delete_option('scporder_install');
 }
 
-?>
+require_once 'class-colorlib-dashboard-widget-extend-feed.php';
