@@ -31,23 +31,33 @@
     /****
      * Fix for table breaking
      */
-    jQuery(window).load(function(){
+    jQuery(window).load(function () {
         // fix for padding issue when table braking
-        $('#the-list').before('<style>.widefat td, .widefat th{padding:8px 10px !important;}</style>');
-
-        jQuery('#the-list').parent().find('thead').find('th').each(function () {
-            $(this).width($(this).width());
-        });
-
-        jQuery('#the-list tr').each(function () {
-            $(this).width($(this).width());
-        });
-
-        jQuery('#the-list').find('td').each(function () {
-            $(this).width($(this).width());
-        });
+        $('#the-list').parent('table').before('<style>.widefat td, .widefat th{padding:8px 10px !important;}</style>');
 
         jQuery('#the-list').width(jQuery('#the-list').width());
+
+        // make the array for the sizes
+        var td_array = new Array();
+        var i = 0;
+        jQuery('#the-list tr:first-child').find('td').each(function () {
+            td_array[i] = $(this).width();
+            i += 1;
+        });
+
+        jQuery('#the-list').find('tr').each(function () {
+            var j = 0;
+            $(this).find('td').each(function () {
+                $(this).width(td_array[j]);
+                j += 1;
+            });
+        });
+
+        var y = 0;
+        jQuery('#the-list').parent().find('thead').find('th').each(function () {
+            $(this).width(td_array[y]);
+            y += 1;
+        });
     });
 
     /*****
