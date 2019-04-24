@@ -32,16 +32,13 @@
      * Fix for table breaking
      */
     jQuery(window).load(function () {
-        // fix for padding issue when table braking
-        $('#the-list').parent('table').before('<style>.widefat td, .widefat th{padding:8px 10px !important;}</style>');
-
         jQuery('#the-list').width(jQuery('#the-list').width());
 
         // make the array for the sizes
         var td_array = new Array();
         var i = 0;
         jQuery('#the-list tr:first-child').find('td').each(function () {
-            td_array[i] = $(this).width();
+            td_array[i] = $(this).outerWidth();
             i += 1;
         });
 
