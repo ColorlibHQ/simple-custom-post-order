@@ -31,22 +31,29 @@
     /****
      * Fix for table breaking
      */
+    jQuery(window).load(function () {
+        jQuery('#the-list').width(jQuery('#the-list').width());
 
-    $('#the-list').on('mousedown', function () {
-        jQuery('#the-list').parent().find('thead').find('th').each(function () {
-            $(this).width($(this).width())
+        // make the array for the sizes
+        var td_array = new Array();
+        var i = 0;
+        jQuery('#the-list tr:first-child').find('td').each(function () {
+            td_array[i] = $(this).outerWidth();
+            i += 1;
         });
-        jQuery('#the-list').find('td').each(function () {
-            $(this).width($(this).width())
-        });
-    });
 
-    $('#the-list').on('mouseup', function () {
-        jQuery('#the-list').parent().find('thead').find('th').each(function () {
-            $(this).removeAttr('style');
+        jQuery('#the-list').find('tr').each(function () {
+            var j = 0;
+            $(this).find('td').each(function () {
+                $(this).width(td_array[j]);
+                j += 1;
+            });
         });
-        jQuery('#the-list').find('td').each(function () {
-            $(this).removeAttr('style');
+
+        var y = 0;
+        jQuery('#the-list').parent().find('thead').find('th').each(function () {
+            $(this).width(td_array[y]);
+            y += 1;
         });
     });
 
