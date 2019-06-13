@@ -36,8 +36,9 @@ An answer to that question.
 
 == Changelog ==
 
-= Version 2.4.3 =
-* Fix for slow javscript in admin
+= Version 2.4.4 =
+* Fix for slow javscript in admin( https://github.com/ColorlibHQ/simple-custom-post-order/issues/46 )
+* Fix database error( https://github.com/ColorlibHQ/simple-custom-post-order/issues/36 )
 
 = Version 2.4.3 =
 * Minor UI update added toggles
