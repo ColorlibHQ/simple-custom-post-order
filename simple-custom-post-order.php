@@ -231,13 +231,13 @@ class SCPO_Engine {
                 // Here's the optimization
                 $wpdb->query("SET @row_number = 0;");
                 $wpdb->query("UPDATE $wpdb->posts as pt JOIN (
-                  SELECT ID, (@row_number:=@row_number + 1) AS rank
+                  SELECT ID, (@row_number:=@row_number + 1) AS `rank`
                   FROM $wpdb->posts
                   WHERE post_type = '$object' AND post_status IN ( 'publish', 'pending', 'draft', 'private', 'future' )
                   ORDER BY menu_order ASC
                 ) as pt2
                 ON pt.id = pt2.id
-                SET pt.menu_order = pt2.rank;");
+                SET pt.menu_order = pt2.`rank`;");
 
             }
         }
