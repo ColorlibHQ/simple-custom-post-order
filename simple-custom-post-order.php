@@ -298,6 +298,8 @@ class SCPO_Engine {
                 $wpdb->update($wpdb->posts, array('menu_order' => $menu_order_arr[$position]), array('ID' => intval($id)));
             }
         }
+
+        do_action('scp_update_menu_order');
     }
 
     public function update_menu_order_tags() {
@@ -329,6 +331,8 @@ class SCPO_Engine {
                 $wpdb->update($wpdb->terms, array('term_order' => $menu_order_arr[$position]), array('term_id' => intval($id)));
             }
         }
+
+        do_action('scp_update_menu_order_tags');
     }
 
     public function update_options() {
