@@ -516,7 +516,12 @@ class SCPO_Engine {
         if (!isset($args['taxonomy']))
             return $orderby;
 
-        $taxonomy = $args['taxonomy'];
+        if(is_array($args['taxonomy'])){
+            $taxonomy = $args['taxonomy'][0];
+        } else {
+            $taxonomy = $args['taxonomy'];
+        }
+
         if (!in_array($taxonomy, $tags))
             return $orderby;
 
