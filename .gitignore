@@ -1,0 +1,7 @@
+Thumbs.db
+node_modules/*
+.idea/*
+simple-custom-post-order.zip
+.DS_Store
+package-lock.json
+.standard.json
