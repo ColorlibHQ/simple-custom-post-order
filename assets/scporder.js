@@ -51,10 +51,14 @@
         });
 
         var y = 0;
-        jQuery('#the-list').parent().find('thead').find('th').each(function () {
-            $(this).width(td_array[y]);
-            y += 1;
-        });
+        // check if there are no items in the table
+        if(jQuery('#the-list > tr.no-items').length == 0){
+            jQuery('#the-list').parent().find('thead').find('th').each(function () {
+                $(this).width(td_array[y]);
+                y += 1;
+            });
+        }
+
     });
 
     /*****

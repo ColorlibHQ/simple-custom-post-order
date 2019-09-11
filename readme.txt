@@ -3,8 +3,8 @@ Contributors: silkalns
 Tags: custom post order, post order, js post order, page order, posts order, category order, sort posts, sort pages, sort custom posts
 Requires at least: 4.6
 Requires PHP: 5.6
-Tested up to: 5.1
-Stable tag: 2.4.4
+Tested up to: 5.2
+Stable tag: 2.4.5
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -35,6 +35,11 @@ An answer to that question.
 3. Settings
 
 == Changelog ==
+
+= Version 2.4.5 =
+* Added 2 action hooks that trigger at `update_menu_order_tags` and `update_menu_order` ( https://github
+* Fix issue with sorting (https://github.com/ColorlibHQ/simple-custom-post-order/issues/49)
+* Fix edit page layout when no item found
 
 = Version 2.4.4 =
 * Fix for slow javscript in admin( https://github.com/ColorlibHQ/simple-custom-post-order/issues/46 )
