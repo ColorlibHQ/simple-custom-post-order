@@ -2,6 +2,8 @@
 $scporder_options = get_option('scporder_options');
 $scporder_objects = isset($scporder_options['objects']) ? $scporder_options['objects'] : array();
 $scporder_tags = isset($scporder_options['tags']) ? $scporder_options['tags'] : array();
+
+$advanced_view = isset($scporder_options['show_advanced_view']) ? $scporder_options['show_advanced_view'] : '';
 ?>
 <style>
 
@@ -257,7 +259,7 @@ $scporder_tags = isset($scporder_options['tags']) ? $scporder_options['tags'] : 
                         <label>
                             <div class="epsilon-toggle">
                                 <input class="epsilon-toggle__input" type="checkbox"
-                                       name="show_advanced_view" value="1" <?php checked( '1', $scporder_options['show_advanced_view'], 'checked="checked"' );  ?>>
+                                       name="show_advanced_view" value="1" <?php checked( '1', $advanced_view, 'checked="checked"' );  ?>>
                                 <div class="epsilon-toggle__items">
                                     <span class="epsilon-toggle__track"></span>
                                     <span class="epsilon-toggle__thumb"></span>
