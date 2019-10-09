@@ -38,6 +38,8 @@ An answer to that question.
 
 = Version 2.4.7 =
 * Fix undefined index when ordering terms
+* Added filter for post types args shown in settings page
+* Added extra option for advanced view of post types
 
 = Version 2.4.6 =
 * Removed dashboard news widget
