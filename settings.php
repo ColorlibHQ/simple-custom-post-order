@@ -276,7 +276,8 @@ $advanced_view = isset($scporder_options['show_advanced_view']) ? $scporder_opti
                             <?php echo __('Show advanced view of Post Types','simple-custom-post-order'); ?>
                         </label><br>
                         <p class="description"><?php _e('NOTICE: This is for advanced users only.','simple-custom-post-order'); ?></p>
-                        <p class="description"><?php _e('Toggle on the above option and update settings to see hidden special content post types.','simple-custom-post-order'); ?></p>
+                        <!--@todo : @giucu please look into below description. -->
+                        <p class="description"><?php _e('Check to include other custom post types. You will need to update your settings after enabling this option.','simple-custom-post-order'); ?></p>
 
                     </td>
                 </tr>
