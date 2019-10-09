@@ -71,6 +71,17 @@ class SCPO_Engine {
         add_action( 'wp_ajax_scporder_dismiss_notices', array( $this, 'dismiss_notices' ) );
 
         add_action( 'plugins_loaded', array( $this, 'load_scpo_textdomain' ) );
+
+        add_filter('scpo_post_types_args',array($this,'scpo_filter_post_types'),10,2);
+    }
+
+    public function scpo_filter_post_types($args,$options){
+
+        if(isset($options['show_advanced_view']) && '1' == $options['show_advanced_view'] ){
+            unset($args['show_in_menu']);
+        }
+
+        return $args;
     }
 
     public function load_scpo_textdomain(){
@@ -346,6 +357,7 @@ class SCPO_Engine {
         $input_options = array();
         $input_options['objects'] = isset($_POST['objects']) ? $_POST['objects'] : '';
         $input_options['tags'] = isset($_POST['tags']) ? $_POST['tags'] : '';
+        $input_options['show_advanced_view'] = isset($_POST['show_advanced_view']) ? $_POST['show_advanced_view'] : '';
 
         update_option('scporder_options', $input_options);
 
