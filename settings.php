@@ -2,6 +2,8 @@
 $scporder_options = get_option('scporder_options');
 $scporder_objects = isset($scporder_options['objects']) ? $scporder_options['objects'] : array();
 $scporder_tags = isset($scporder_options['tags']) ? $scporder_options['tags'] : array();
+
+$advanced_view = isset($scporder_options['show_advanced_view']) ? $scporder_options['show_advanced_view'] : '';
 ?>
 <style>
 
@@ -136,10 +138,12 @@ $scporder_tags = isset($scporder_options['tags']) ? $scporder_options['tags'] : 
                                 </div>
                                 &nbsp;<?php _e('Check All', 'simple-custom-post-order') ?></label><br>
                             <?php
-                            $post_types = get_post_types(array(
-                                'show_ui' => true,
+                            $post_types_args = apply_filters('scpo_post_types_args', array(
+                                'show_ui'      => true,
                                 'show_in_menu' => true,
-                                    ), 'objects');
+                            ),$scporder_options);
+
+                            $post_types = get_post_types($post_types_args, 'objects');
 
                             foreach ($post_types as $post_type) {
                                 if ($post_type->name == 'attachment')
@@ -244,6 +248,41 @@ $scporder_tags = isset($scporder_options['tags']) ? $scporder_options['tags'] : 
                 </tbody>
             </table>
 
+        </div>
+
+        <div id="scporder_advanved_view">
+            <table class="form-table">
+                <tbody>
+                <tr valign="top">
+                    <th scope="row"><?php _e('Check to see advanced view of Post Types ', 'simple-custom-post-order') ?></th>
+                    <td>
+                        <label>
+                            <div class="epsilon-toggle">
+                                <input class="epsilon-toggle__input" type="checkbox"
+                                       name="show_advanced_view" value="1" <?php checked( '1', $advanced_view, 'checked="checked"' );  ?>>
+                                <div class="epsilon-toggle__items">
+                                    <span class="epsilon-toggle__track"></span>
+                                    <span class="epsilon-toggle__thumb"></span>
+                                    <svg class="epsilon-toggle__off" width="6" height="6" aria-hidden="true"
+                                         role="img" focusable="false" viewBox="0 0 6 6">
+                                        <path d="M3 1.5c.8 0 1.5.7 1.5 1.5S3.8 4.5 3 4.5 1.5 3.8 1.5 3 2.2 1.5 3 1.5M3 0C1.3 0 0 1.3 0 3s1.3 3 3 3 3-1.3 3-3-1.3-3-3-3z"></path>
+                                    </svg>
+                                    <svg class="epsilon-toggle__on" width="2" height="6" aria-hidden="true"
+                                         role="img" focusable="false" viewBox="0 0 2 6">
+                                        <path d="M0 0h2v6H0z"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                            <?php echo __('Show advanced view of Post Types','simple-custom-post-order'); ?>
+                        </label><br>
+                        <p class="description"><?php _e('NOTICE: This is for advanced users only.','simple-custom-post-order'); ?></p>
+                        <!--@todo : @giucu please look into below description. -->
+                        <p class="description"><?php _e('Check to include other custom post types. You will need to update your settings after enabling this option.','simple-custom-post-order'); ?></p>
+
+                    </td>
+                </tr>
+                </tbody>
+            </table>
         </div>
         <p class="submit">
             <input type="submit" class="button-primary" name="scporder_submit" value="<?php _e('Update', 'simple-custom-post-order'); ?>">

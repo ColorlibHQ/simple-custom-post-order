@@ -7,7 +7,7 @@ module.exports = function(grunt) {
     checktextdomain: {
         standard: {
             options:{
-                text_domain: [ 'fancybox-for-wordpress' ], //Specify allowed domain(s)
+                text_domain: [ 'simple-custom-post-order' ], //Specify allowed domain(s)
                 create_report_file: "true",
                 keywords: [ //List keyword specifications
                     '__:1,2d',
@@ -42,9 +42,9 @@ module.exports = function(grunt) {
                   domainPath: 'languages/',         // Where to save the POT file.
                   exclude: [],                      // List of files or directories to ignore.
                   include: [],                      // List of files or directories to include.
-                  mainFile: 'fancybox.php',                     // Main project file.
+                  mainFile: 'simple-custom-post-order.php',                     // Main project file.
                   potComments: '',                  // The copyright at the beginning of the POT file.
-                  potFilename: 'fancybox-for-wordpress.po',                  // Name of the POT file.
+                  potFilename: 'simple-custom-post-order.po',                  // Name of the POT file.
                   potHeaders: {
                       poedit: true,                 // Includes common Poedit headers.
                       'x-poedit-keywordslist': true // Include a list of all possible gettext functions.
@@ -84,7 +84,7 @@ module.exports = function(grunt) {
               '!composer.json',
               '!composer.lock',
               '!set_tags.sh',
-              '!fancybox-for-wordpress.zip',
+              '!simple-custom-post-order.zip',
               '!nbproject/**' ],
           dest: 'build/'
       }

@@ -3,7 +3,7 @@
 * Plugin Name: Simple Custom Post Order
 * Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
 * Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
-* Version: 2.4.5
+* Version: 2.4.7
 * Author: Colorlib
 * Author URI: https://colorlib.com/
 * Tested up to: 5.2
@@ -36,7 +36,7 @@
 
 define('SCPORDER_URL', plugins_url('', __FILE__));
 define('SCPORDER_DIR', plugin_dir_path(__FILE__));
-define('SCPORDER_VERSION', '2.4.5');
+define('SCPORDER_VERSION', '2.4.7');
 
 $scporder = new SCPO_Engine();
 
@@ -71,6 +71,17 @@ class SCPO_Engine {
         add_action( 'wp_ajax_scporder_dismiss_notices', array( $this, 'dismiss_notices' ) );
 
         add_action( 'plugins_loaded', array( $this, 'load_scpo_textdomain' ) );
+
+        add_filter('scpo_post_types_args',array($this,'scpo_filter_post_types'),10,2);
+    }
+
+    public function scpo_filter_post_types($args,$options){
+
+        if(isset($options['show_advanced_view']) && '1' == $options['show_advanced_view'] ){
+            unset($args['show_in_menu']);
+        }
+
+        return $args;
     }
 
     public function load_scpo_textdomain(){
@@ -346,6 +357,7 @@ class SCPO_Engine {
         $input_options = array();
         $input_options['objects'] = isset($_POST['objects']) ? $_POST['objects'] : '';
         $input_options['tags'] = isset($_POST['tags']) ? $_POST['tags'] : '';
+        $input_options['show_advanced_view'] = isset($_POST['show_advanced_view']) ? $_POST['show_advanced_view'] : '';
 
         update_option('scporder_options', $input_options);
 
@@ -464,6 +476,7 @@ class SCPO_Engine {
 
     public function scporder_pre_get_posts($wp_query) {
         $objects = $this->get_scporder_options_objects();
+
         if (empty($objects))
             return false;
         if (is_admin()) {
@@ -504,6 +517,7 @@ class SCPO_Engine {
                 if (!$wp_query->get('order'))
                     $wp_query->set('order', 'ASC');
             }
+
         }
     }
 
@@ -517,7 +531,12 @@ class SCPO_Engine {
             return $orderby;
 
         if(is_array($args['taxonomy'])){
-            $taxonomy = $args['taxonomy'][0];
+            if(isset($args['taxonomy'][0])){
+                $taxonomy = $args['taxonomy'][0];
+            } else {
+                $taxonomy = false;
+            }
+
         } else {
             $taxonomy = $args['taxonomy'];
         }
