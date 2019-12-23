@@ -470,8 +470,10 @@ class SCPO_Engine {
 
             if (isset($wp_query->query['post_type']) && !isset($_GET['orderby'])) {
                 if (in_array($wp_query->query['post_type'], $objects)) {
-                    $wp_query->set('orderby', 'menu_order');
-                    $wp_query->set('order', 'ASC');
+                    if (!$wp_query->get('orderby'))
+                        $wp_query->set('orderby', 'menu_order');
+                    if (!$wp_query->get('order'))
+                        $wp_query->set('order', 'ASC');
                 }
             }
         } else {
