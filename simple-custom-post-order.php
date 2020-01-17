@@ -48,7 +48,7 @@ class SCPO_Engine {
 
         add_action('admin_menu', array($this, 'admin_menu'));
 
-        add_action('admin_init', array($this, 'refresh'));
+        // add_action('admin_init', array($this, 'refresh'));
 
         add_action('admin_init', array($this, 'update_options'));
         add_action('admin_init', array($this, 'load_script_css'));
@@ -232,6 +232,7 @@ class SCPO_Engine {
         $tags = $this->get_scporder_options_tags();
 
         if (!empty($objects)) {
+            
             foreach ($objects as $object) {
                 $result = $wpdb->get_results("
                     SELECT count(*) as cnt, max(menu_order) as max, min(menu_order) as min
