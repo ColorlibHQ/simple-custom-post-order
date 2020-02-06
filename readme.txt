@@ -3,8 +3,8 @@ Contributors: silkalns
 Tags: custom post order, post order, js post order, page order, posts order, category order, sort posts, sort pages, sort custom posts
 Requires at least: 4.6
 Requires PHP: 5.6
-Tested up to: 5.2
-Stable tag: 2.4.5
+Tested up to: 5.3
+Stable tag: 2.4.9
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -35,6 +35,21 @@ An answer to that question.
 3. Settings
 
 == Changelog ==
+
+= Version 2.4.9 =
+* Fixed "Post order not saving"
+
+= Version 2.4.8 =
+* Add ability to reset order to post types
+
+= Version 2.4.7 =
+* Fix undefined index when ordering terms
+* Added filter for post types args shown in settings page
+* Added extra option for advanced view of post types
+
+= Version 2.4.6 =
+* Removed dashboard news widget
+
 
 = Version 2.4.5 =
 * Added 2 action hooks that trigger at `update_menu_order_tags` and `update_menu_order` ( https://github

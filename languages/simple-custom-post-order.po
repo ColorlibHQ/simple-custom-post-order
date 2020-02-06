@@ -1,65 +1,109 @@
+# Copyright (C) 2019 Colorlib
+# This file is distributed under the GPLv3 or later.
 msgid ""
 msgstr ""
-"Project-Id-Version: \n"
-"POT-Creation-Date: 2019-01-20 19:46+0200\n"
-"PO-Revision-Date: 2019-01-20 19:47+0200\n"
-"Last-Translator: \n"
-"Language-Team: \n"
-"Language: en\n"
+"Project-Id-Version: Simple Custom Post Order 2.4.7\n"
+"Report-Msgid-Bugs-To: "
+"https://wordpress.org/support/plugin/simple-custom-post-order\n"
+"POT-Creation-Date: 2019-10-09 08:57:28+00:00\n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: Poedit 2.2.1\n"
-"X-Poedit-Basepath: ..\n"
+"PO-Revision-Date: 2019-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: en\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
-"X-Poedit-KeywordsList: __;_e;esc_html_e\n"
+"X-Poedit-Country: United States\n"
+"X-Poedit-SourceCharset: UTF-8\n"
+"X-Poedit-KeywordsList: "
+"__;_e;_x:1,2c;_ex:1,2c;_n:1,2;_nx:1,2,4c;_n_noop:1,2;_nx_noop:1,2,3c;esc_"
+"attr__;esc_html__;esc_attr_e;esc_html_e;esc_attr_x:1,2c;esc_html_x:1,2c;\n"
+"X-Poedit-Basepath: ../\n"
 "X-Poedit-SearchPath-0: .\n"
-"X-Poedit-SearchPath-1: simple-custom-post-order.php\n"
-"X-Poedit-SearchPath-2: settings.php\n"
+"X-Poedit-Bookmarks: \n"
+"X-Textdomain-Support: yes\n"
+"X-Generator: grunt-wp-i18n 1.0.3\n"
 
-#: settings.php:8
+#: settings.php:101
 msgid "Simple Custom Post Order Settings"
 msgstr ""
 
-#: settings.php:12
+#: settings.php:105
 msgid "Settings Updated."
 msgstr ""
 
-#: settings.php:26
+#: settings.php:119
 msgid "Check to Sort Post Types"
 msgstr ""
 
-#: settings.php:28 settings.php:63
+#: settings.php:137 settings.php:207
 msgid "Check All"
 msgstr ""
 
-#: settings.php:61
+#: settings.php:189
 msgid "Check to Sort Taxonomies"
 msgstr ""
 
-#: settings.php:90
+#: settings.php:255
+msgid "Check to see advanced view of Post Types "
+msgstr ""
+
+#: settings.php:274
+msgid "Show advanced view of Post Types"
+msgstr ""
+
+#: settings.php:276
+msgid "NOTICE: This is for advanced users only."
+msgstr ""
+
+#: settings.php:277
+msgid ""
+"Toggle on the above option and update settings to see hidden special "
+"content post types."
+msgstr ""
+
+#: settings.php:285
 msgid "Update"
 msgstr ""
 
-#: simple-custom-post-order.php:91
+#. Plugin Name of the plugin/theme
 msgid "Simple Custom Post Order"
 msgstr ""
 
-#: simple-custom-post-order.php:93
+#: simple-custom-post-order.php:128
 msgid ""
 "Thank you for installing our awesome plugin, in order to enable it you need "
-"to go to the settings page and select which custom post or taxonomy you want "
-"to order."
+"to go to the settings page and select which custom post or taxonomy you "
+"want to order."
 msgstr ""
 
-#: simple-custom-post-order.php:95
+#: simple-custom-post-order.php:130
 msgid "Get started !"
 msgstr ""
 
-#: simple-custom-post-order.php:96
+#: simple-custom-post-order.php:131
 msgid "Dismiss this notice."
 msgstr ""
 
-#: simple-custom-post-order.php:145
+#: simple-custom-post-order.php:180
 msgid "SCPOrder"
+msgstr ""
+
+#. Plugin URI of the plugin/theme
+msgid "https://wordpress.org/plugins-wp/simple-custom-post-order/"
+msgstr ""
+
+#. Description of the plugin/theme
+msgid ""
+"Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop "
+"Sortable JavaScript."
+msgstr ""
+
+#. Author of the plugin/theme
+msgid "Colorlib"
+msgstr ""
+
+#. Author URI of the plugin/theme
+msgid "https://colorlib.com/"
 msgstr ""
