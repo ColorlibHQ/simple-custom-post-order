@@ -561,7 +561,7 @@ class SCPO_Engine {
     }
 
     public function scporder_get_object_terms($terms, $object_ids, $taxonomies, $args) {
-		$this->scporder_get_terms($terms, $taxonomies, $args);
+        return $this->scporder_get_terms($terms, $taxonomies, $args);
     }
 
     public function scporder_get_terms($terms, $taxonomies, $args) {
