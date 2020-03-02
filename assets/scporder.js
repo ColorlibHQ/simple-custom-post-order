@@ -45,7 +45,8 @@
         jQuery('#the-list').find('tr').each(function () {
             var j = 0;
             $(this).find('td').each(function () {
-                $(this).width(td_array[j]);
+                var paddingx = parseInt($(this).css('padding-left').replace('px', '')) + parseInt($(this).css('padding-right').replace('px', ''));
+                $(this).width(td_array[j] - paddingx);
                 j += 1;
             });
         });
@@ -54,7 +55,8 @@
         // check if there are no items in the table
         if(jQuery('#the-list > tr.no-items').length == 0){
             jQuery('#the-list').parent().find('thead').find('th').each(function () {
-                $(this).width(td_array[y]);
+                var paddingx = parseInt($(this).css('padding-left').replace('px', '')) + parseInt($(this).css('padding-right').replace('px', ''));
+                $(this).width(td_array[y] - paddingx);
                 y += 1;
             });
         }
