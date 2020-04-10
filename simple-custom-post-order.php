@@ -46,6 +46,8 @@ class SCPO_Engine {
         if (!get_option('scporder_install'))
             $this->scporder_install();
 
+        $this->load_dependencies();
+
         add_action('admin_menu', array($this, 'admin_menu'));
 
         add_action('admin_init', array( $this, 'refresh' ) );
@@ -75,6 +77,10 @@ class SCPO_Engine {
         add_filter('scpo_post_types_args',array($this,'scpo_filter_post_types'),10,2);
 
         add_action('wp_ajax_scpo_reset_order', array($this, 'scpo_ajax_reset_order'));
+    }
+
+    private function load_dependencies() {
+        include SCPORDER_DIR . 'class-simple-review.php';
     }
 
     public function scpo_filter_post_types($args,$options){
