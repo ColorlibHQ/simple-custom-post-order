@@ -47,6 +47,7 @@
             var j = 0;
             $(this).find('td').each(function () {
                 $(this).width(td_array[j]);
+                $(this).css('padding','8px 0px');
                 j += 1;
             });
         });
