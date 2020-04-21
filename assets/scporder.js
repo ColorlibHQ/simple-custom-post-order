@@ -39,6 +39,7 @@
         var i = 0;
         jQuery('#the-list tr:first-child').find('td').each(function () {
             td_array[i] = $(this).outerWidth();
+            $(this).css('padding','8px 0px');
             i += 1;
         });
 
@@ -51,10 +52,18 @@
         });
 
         var y = 0;
+        console.log(td_array);
         // check if there are no items in the table
         if(jQuery('#the-list > tr.no-items').length == 0){
             jQuery('#the-list').parent().find('thead').find('th').each(function () {
                 $(this).width(td_array[y]);
+                $(this).css('padding','8px 0px');
+                y += 1;
+            });
+
+            jQuery('#the-list').parent().find('tfoot').find('th').each(function () {
+                $(this).width(td_array[y]);
+                $(this).css('padding','8px 0px');
                 y += 1;
             });
         }
