@@ -52,7 +52,7 @@
         });
 
         var y = 0;
-        console.log(td_array);
+
         // check if there are no items in the table
         if(jQuery('#the-list > tr.no-items').length == 0){
             jQuery('#the-list').parent().find('thead').find('th').each(function () {
