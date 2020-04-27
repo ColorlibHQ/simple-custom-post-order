@@ -38,6 +38,7 @@ An answer to that question.
 
 = Version 2.5.0 =
 * Fixed post list table width when sorting is enabled
+* Review dismiss fix
 
 = Version 2.4.9 =
 * Fixed "Post order not saving"
