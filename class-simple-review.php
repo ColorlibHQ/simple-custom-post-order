@@ -134,7 +134,7 @@ class Simple_Review {
 						check: id
 					};
 
-					if ( 'epsilon-rated' === id ) {
+					if ( 'epsilon-rated' === id || 'epsilon-rate' === id ) {
 						data['epsilon-review'] = 1;
 					}
 
@@ -145,6 +145,21 @@ class Simple_Review {
 					});
 
 				} );
+
+				$('#simple-custom-post-order-epsilon-review-notice .notice-dismiss').click(function(){
+
+					var data = {
+						action: 'epsilon_simple_review',
+						security: '<?php echo $ajax_nonce; ?>',
+						check: 'epsilon-later'
+					};
+
+					$.post( '<?php echo admin_url( 'admin-ajax.php' ) ?>', data, function( response ) {
+						$( '#<?php echo $this->slug ?>-epsilon-review-notice' ).slideUp( 'fast', function() {
+							$( this ).remove();
+						} );
+					});
+				});
 
 			});
 		</script>
