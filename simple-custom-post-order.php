@@ -66,9 +66,9 @@ class SCPO_Engine {
         add_filter('get_next_post_sort', array($this, 'scporder_next_post_sort'));
 
         add_filter('get_terms_orderby', array($this, 'scporder_get_terms_orderby'), 10, 3);
-        add_filter('wp_get_object_terms', array($this, 'scporder_get_object_terms'), 10, 3);
-        add_filter('get_terms', array($this, 'scporder_get_object_terms'), 10, 3);
-        
+        add_filter('wp_get_object_terms', array($this, 'scporder_get_object_terms'), 10, 4);
+        add_filter('get_terms', array($this, 'scporder_get_terms'), 10, 3);
+
         add_action( 'admin_notices', array( $this, 'scporder_notice_not_checked' ) );
         add_action( 'wp_ajax_scporder_dismiss_notices', array( $this, 'dismiss_notices' ) );
 
@@ -243,7 +243,6 @@ class SCPO_Engine {
         $tags = $this->get_scporder_options_tags();
 
         if (!empty($objects)) {
-            
             foreach ($objects as $object) {
                 $result = $wpdb->get_results("
                     SELECT count(*) as cnt, max(menu_order) as max, min(menu_order) as min
@@ -541,6 +540,9 @@ class SCPO_Engine {
         if (is_admin())
             return $orderby;
 
+        if (isset($args['include']) && isset($args['orderby']) && 'include' === $args['orderby'])
+            return $orderby;
+
         $tags = $this->get_scporder_options_tags();
 
         if (!isset($args['taxonomy']))
@@ -564,10 +566,17 @@ class SCPO_Engine {
         return $orderby;
     }
 
-    public function scporder_get_object_terms($terms) {
+    public function scporder_get_object_terms($terms, $object_ids, $taxonomies, $args) {
+        return $this->scporder_get_terms($terms, $taxonomies, $args);
+    }
+
+    public function scporder_get_terms($terms, $taxonomies, $args) {
         $tags = $this->get_scporder_options_tags();
 
         if (is_admin() && isset($_GET['orderby']))
+            return $terms;
+
+        if (isset($args['include']) && isset($args['orderby']) && 'include' === $args['orderby'])
             return $terms;
 
         foreach ($terms as $key => $term) {
