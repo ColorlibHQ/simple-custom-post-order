@@ -3,8 +3,8 @@ Contributors: silkalns
 Tags: custom post order, post order, js post order, page order, posts order, category order, sort posts, sort pages, sort custom posts
 Requires at least: 4.6
 Requires PHP: 5.6
-Tested up to: 5.3
-Stable tag: 2.4.9
+Tested up to: 5.4
+Stable tag: 2.5.0
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -35,6 +35,10 @@ An answer to that question.
 3. Settings
 
 == Changelog ==
+
+= Version 2.5.0 =
+* Fixed post list table width when sorting is enabled
+* Review dismiss fix
 
 = Version 2.4.9 =
 * Fixed "Post order not saving"

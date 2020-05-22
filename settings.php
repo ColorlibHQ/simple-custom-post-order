@@ -125,6 +125,7 @@ $advanced_view = isset($scporder_options['show_advanced_view']) ? $scporder_opti
                     <tr valign="top">
                         <th scope="row"><?php _e('Check to Sort Post Types', 'simple-custom-post-order') ?></th>
                         <td>
+
                             <label>
                                 <div class="epsilon-toggle">
                                     <input id="scporder_allcheck_objects" class="epsilon-toggle__input" type="checkbox">
@@ -195,6 +196,7 @@ $advanced_view = isset($scporder_options['show_advanced_view']) ? $scporder_opti
                     <tr valign="top">
                         <th scope="row"><?php _e('Check to Sort Taxonomies', 'simple-custom-post-order') ?></th>
                         <td>
+
                             <label>
                                 <div class="epsilon-toggle">
                                     <input id="scporder_allcheck_tags" class="epsilon-toggle__input" type="checkbox">
@@ -212,6 +214,7 @@ $advanced_view = isset($scporder_options['show_advanced_view']) ? $scporder_opti
                                     </div>
                                 </div>
                                 &nbsp;<?php _e('Check All', 'simple-custom-post-order') ?></label><br>
+
                             <?php
                             $taxonomies = get_taxonomies(array(
                                 'show_ui' => true,
@@ -254,7 +257,6 @@ $advanced_view = isset($scporder_options['show_advanced_view']) ? $scporder_opti
             </table>
 
         </div>
-
         <div id="scporder_advanved_view">
             <table class="form-table">
                 <tbody>
@@ -289,6 +291,7 @@ $advanced_view = isset($scporder_options['show_advanced_view']) ? $scporder_opti
                 </tbody>
             </table>
         </div>
+
         <p class="submit">
             <input type="submit" class="button-primary" name="scporder_submit" value="<?php _e('Update', 'simple-custom-post-order'); ?>">
         </p>
@@ -339,6 +342,7 @@ $advanced_view = isset($scporder_options['show_advanced_view']) ? $scporder_opti
             <span class="scpo-reset-response"></span>
         </div>
     </div>
+
     <h3>Like this simple plugin?</h3>
     <p>Make sure to <a href="https://wordpress.org/support/plugin/simple-custom-post-order/reviews/?filter=5"><strong>rate it</strong></a> and visit us at <a href="https://colorlib.com/wp/"><strong>Colorlib.com</strong></a></p>
 
