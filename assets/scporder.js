@@ -58,7 +58,7 @@
         var y = 0;
 
         // check if there are no items in the table
-        if(jQuery('#the-list > tr.no-items').length == 0){
+        if(jQuery('#the-list > tr.no-items').length !== 0){
             jQuery('#the-list').parent().find('thead').find('th').each(function () {
 
                 var paddingx = parseInt($(this).css('padding-left').replace('px', '')) + parseInt($(this).css('padding-right').replace('px', ''));
