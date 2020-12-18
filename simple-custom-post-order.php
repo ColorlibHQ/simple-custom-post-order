@@ -552,26 +552,10 @@ class SCPO_Engine {
 
         $tags = $this->get_scporder_options_tags();
 
-        if (!isset($args['taxonomy']))
+        if (0 === count(array_intersect((array) $taxonomy, array_values($tags))))
             return $orderby;
 
-
-        if(is_array($args['taxonomy'])){
-            if(isset($args['taxonomy'][0])){
-                $taxonomy = $args['taxonomy'][0];
-            } else {
-                $taxonomy = false;
-            }
-
-        } else {
-            $taxonomy = $args['taxonomy'];
-        }
-
-
-        if (!in_array($taxonomy, $tags))
-            return $orderby;
-
-        $orderby = 't.term_order';
+        $orderby = 't.term_order,' . $orderby;
         return $orderby;
     }
 
