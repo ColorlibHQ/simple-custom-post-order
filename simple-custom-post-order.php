@@ -281,8 +281,10 @@ class SCPO_Engine {
                     INNER JOIN $wpdb->term_taxonomy AS term_taxonomy ON ( terms.term_id = term_taxonomy.term_id )
                     WHERE term_taxonomy.taxonomy = '" . $taxonomy . "'
                 ");
-                if ($result[0]->cnt == 0 || $result[0]->cnt == $result[0]->max)
-                    continue;
+                if (count($result) > 0) {
+                    if ($result[0]->cnt == 0 || $result[0]->cnt == $result[0]->max)
+                        continue;
+                }
 
                 $results = $wpdb->get_results("
                     SELECT terms.term_id
