@@ -1,10 +1,10 @@
 === Simple Custom Post Order ===
 Contributors: silkalns
 Tags: custom post order, post order, js post order, page order, posts order, category order, sort posts, sort pages, sort custom posts
-Requires at least: 4.6
-Requires PHP: 5.6
-Tested up to: 5.7
-Stable tag: 2.5.6
+Requires at least: 6.2
+Requires PHP: 7.2.5 or higher
+Tested up to: 6.3.1
+Stable tag: 2.5.7
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -35,6 +35,11 @@ An answer to that question.
 3. Settings
 
 == Changelog ==
+
+= Version 2.5.7 - 20.09.2023 =
+* Security update fixing multiple issues
+* Code cleanup for better performance
+
 = Version 2.5.6 - 27.05.2021 =
 Changed : Revert to 2.5.4
 
