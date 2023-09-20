@@ -57,7 +57,7 @@
 
         var y = 0;
 
-        // check if there are no items in the table
+        // check if there are items in the table
         if(jQuery('#the-list > tr.no-items').length == 0){
             jQuery('#the-list').parent().find('thead').find('th').each(function () {
 

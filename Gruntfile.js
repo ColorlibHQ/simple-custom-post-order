@@ -4,6 +4,10 @@ module.exports = function(grunt) {
 
   grunt.initConfig({
     pkg: grunt.file.readJSON('package.json'),
+
+    dirs: {
+        js: '/assets'
+    },
     checktextdomain: {
         standard: {
             options:{
@@ -65,7 +69,13 @@ module.exports = function(grunt) {
                 'build/*',
                 '!build/<%= pkg.name %>.zip'
             ]
-        }
+        },
+        jsmin : {
+				src: [
+					'assets/js/*.min.js',
+					'assets/js/front/*.min.js',
+				]
+			}
     },
     copy: {
       build: {
@@ -89,6 +99,28 @@ module.exports = function(grunt) {
           dest: 'build/'
       }
     },
+    uglify: {
+		options: {
+		  compress: {
+		    global_defs: {
+		      'DEBUG': true
+		    },
+		    dead_code: true
+		  }
+		},
+		jsfiles: {
+			files: [ {
+				expand: true,
+				cwd   : 'assets/',
+				src   : [
+					'*.js',
+                    '!*.min.js',
+				],
+				dest  : 'assets/',
+				ext   : '.min.js'
+			} ]
+		}
+	},
     compress: {
         build: {
             options: {
@@ -112,4 +144,8 @@ module.exports = function(grunt) {
       'compress:build',
       'clean:init'
   ]);
+  grunt.registerTask( 'minjs', [  // Minify CSS
+		'clean:jsmin',
+		'uglify',
+	] );
 };
