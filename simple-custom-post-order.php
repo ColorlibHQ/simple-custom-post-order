@@ -361,6 +361,8 @@ class SCPO_Engine {
 			}
 		}
 
+		wp_cache_flush();
+
 		do_action( 'scp_update_menu_order' );
 	}
 
@@ -403,6 +405,8 @@ class SCPO_Engine {
 				); // Passage en requette préparée
 			}
 		}
+
+		wp_cache_flush();
 
 		do_action( 'scp_update_menu_order_tags' );
 
