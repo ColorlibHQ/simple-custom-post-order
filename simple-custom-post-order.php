@@ -233,6 +233,10 @@ class SCPO_Engine {
 			wp_enqueue_script( 'jquery' );
 			wp_enqueue_script( 'jquery-ui-sortable' );
 			wp_enqueue_script( 'scporderjs', SCPORDER_URL . '/assets/scporder.min.js', array( 'jquery' ), SCPORDER_VERSION, true );
+			wp_localize_script( 'scporderjs', 'scporder_vars', array(
+				'ajax_url' => admin_url( 'admin-ajax.php' ),
+				'nonce'    => wp_create_nonce( 'scporder_nonce_action' ),
+			) );
 			add_action( 'admin_print_styles', array( $this, 'print_scpo_style' ) );
 
 		}
@@ -323,6 +327,12 @@ class SCPO_Engine {
 	public function update_menu_order() {
 		global $wpdb;
 
+		check_ajax_referer( 'scporder_nonce_action', 'nonce' );
+	
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
 		parse_str( $_POST['order'], $data );
 
 		if ( ! is_array( $data ) ) {
@@ -369,6 +379,12 @@ class SCPO_Engine {
 	//TODO corrigé
 	public function update_menu_order_tags() {
 		global $wpdb;
+
+		check_ajax_referer( 'scporder_nonce_action', 'nonce' );
+	
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
 
 		parse_str( $_POST['order'], $data );
 
