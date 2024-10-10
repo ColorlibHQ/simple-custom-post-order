@@ -36,6 +36,9 @@ An answer to that question.
 
 == Changelog ==
 
+= Version 2.5.8 - TBD =
+* Security update
+
 = Version 2.5.7 - 20.09.2023 =
 * Security update fixing multiple issues
 * Code cleanup for better performance

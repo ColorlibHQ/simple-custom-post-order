@@ -4,9 +4,10 @@
         'axis': 'y',
         'helper': fixHelper,
         'update': function (e, ui) {
-            $.post(ajaxurl, {
+            $.post( scporder_vars.ajax_url, {
                 action: 'update-menu-order',
                 order: $('#the-list').sortable('serialize'),
+                nonce: scporder_vars.nonce
             });
         }
     });
@@ -15,9 +16,10 @@
         'axis': 'y',
         'helper': fixHelper,
         'update': function (e, ui) {
-            $.post(ajaxurl, {
+            $.post( scporder_vars.ajax_url, {
                 action: 'update-menu-order-tags',
                 order: $('#the-list').sortable('serialize'),
+                nonce: scporder_vars.nonce
             });
         }
     });
