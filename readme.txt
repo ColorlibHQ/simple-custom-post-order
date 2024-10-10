@@ -3,8 +3,8 @@ Contributors: silkalns
 Tags: custom post order, post order, js post order, page order, posts order, category order, sort posts, sort pages, sort custom posts
 Requires at least: 6.2
 Requires PHP: 7.2.5 or higher
-Tested up to: 6.3.1
-Stable tag: 2.5.7
+Tested up to: 6.6
+Stable tag: 2.5.8
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -36,7 +36,7 @@ An answer to that question.
 
 == Changelog ==
 
-= Version 2.5.8 - TBD =
+= Version 2.5.8 - 10.10.2024 =
 * Security update
 
 = Version 2.5.7 - 20.09.2023 =
