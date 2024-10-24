@@ -329,10 +329,6 @@ class SCPO_Engine {
 
 		check_ajax_referer( 'scporder_nonce_action', 'nonce' );
 	
-		if ( ! current_user_can( 'manage_options' ) ) {
-			return;
-		}
-
 		parse_str( $_POST['order'], $data );
 
 		if ( ! is_array( $data ) ) {
@@ -381,10 +377,6 @@ class SCPO_Engine {
 		global $wpdb;
 
 		check_ajax_referer( 'scporder_nonce_action', 'nonce' );
-	
-		if ( ! current_user_can( 'manage_options' ) ) {
-			return;
-		}
 
 		parse_str( $_POST['order'], $data );
 
