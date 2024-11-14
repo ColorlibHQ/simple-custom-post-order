@@ -47,7 +47,7 @@ class SCPO_Engine {
 			$this->scporder_install();
 		}
 
-		$this->load_dependencies();
+		add_action( 'init', array( $this, 'load_dependencies' ) );
 
 		add_action( 'admin_menu', array( $this, 'admin_menu' ) );
 
@@ -80,7 +80,7 @@ class SCPO_Engine {
 		add_action( 'wp_ajax_scpo_reset_order', array( $this, 'scpo_ajax_reset_order' ) );
 	}
 
-	private function load_dependencies() {
+	public function load_dependencies() {
 		include SCPORDER_DIR . 'class-simple-review.php';
 	}
 
