@@ -4,7 +4,7 @@ Tags: custom post order, post order, js post order, page order, posts order, cat
 Requires at least: 6.2
 Requires PHP: 7.2.5
 Tested up to: 6.7
-Stable tag: 2.5.9
+Stable tag: 2.5.10
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -35,6 +35,9 @@ An answer to that question.
 3. Settings
 
 == Changelog ==
+
+= Version 2.5.10 - 04.12.2024 =
+* Fix Notice: _load_textdomain_just_in_time.
 
 = Version 2.5.9 - 29.11.2024 =
 * Allow editors to change posts order.
