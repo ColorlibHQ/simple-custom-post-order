@@ -1,6 +1,6 @@
 === Simple Custom Post Order ===
 Contributors: silkalns
-Tags: custom post order, post order, js post order, page order, posts order, category order, sort posts, sort pages, sort custom posts
+Tags: custom post order, post order, js post order, page order, posts order
 Requires at least: 6.2
 Requires PHP: 7.2.5
 Tested up to: 6.7
