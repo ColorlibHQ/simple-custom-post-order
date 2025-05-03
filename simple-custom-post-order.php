@@ -3,7 +3,7 @@
  * Plugin Name: Simple Custom Post Order
  * Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
  * Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
- * Version: 2.5.10
+ * Version: 2.5.11
  * Author: Colorlib
  * Author URI: https://colorlib.com/
  * Tested up to: 6.8
@@ -272,18 +272,42 @@ class SCPO_Engine {
 				}
 
 				// Here's the optimization
-				$wpdb->query( 'SET @row_number = 0;' );
-				$wpdb->query(
-					"UPDATE $wpdb->posts as pt JOIN (
+				// $wpdb->query( 'SET @row_number = 0;' );
+				// $wpdb->query(
+				// 	"UPDATE $wpdb->posts as pt JOIN (
 
-                  SELECT ID, (@row_number:=@row_number + 1) AS `rank`
-                  FROM $wpdb->posts
-                  WHERE post_type = '$object' AND post_status IN ( 'publish', 'pending', 'draft', 'private', 'future' )
-                  ORDER BY menu_order ASC
-                ) as pt2
-                ON pt.id = pt2.id
-                SET pt.menu_order = pt2.`rank`;"
-				);
+                //   SELECT ID, (@row_number:=@row_number + 1) AS `rank`
+                //   FROM $wpdb->posts
+                //   WHERE post_type = '$object' AND post_status IN ( 'publish', 'pending', 'draft', 'private', 'future' )
+                //   ORDER BY menu_order ASC
+                // ) as pt2
+                // ON pt.id = pt2.id
+                // SET pt.menu_order = pt2.`rank`;"
+				// );
+                
+                //fix from https://github.com/ColorlibHQ/simple-custom-post-order/issues/119
+                $current_orders = $wpdb->get_results( 
+                    $wpdb->prepare( "SELECT ID, menu_order FROM {$wpdb->posts} WHERE post_type = %s AND post_status IN ('publish', 'pending', 'draft', 'private', 'future') ORDER BY menu_order ASC", $object ) 
+                );
+                
+                $subquery = "";
+                
+                foreach ( $current_orders as $key => $current_order ) {
+                    if( ! $key ){
+                        $subquery .= $wpdb->prepare( "SELECT %s ID, %d `rank`", $current_order->ID, $key + 1 );
+                    }else{
+                        $subquery .= $wpdb->prepare( " UNION ALL SELECT %s, %d", $current_order->ID, $key + 1 );
+                    }
+                }
+                
+                $wpdb->query( 'SET @row_number = 0;' );
+                $wpdb->query(
+                    "UPDATE $wpdb->posts as pt JOIN (
+                        $subquery
+                            ) as pt2
+                            ON pt.id = pt2.id
+                            SET pt.menu_order = pt2.`rank`;"
+                );
 
 			}
 		}
