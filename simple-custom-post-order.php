@@ -371,7 +371,12 @@ class SCPO_Engine {
 			}
 		}
 
-		wp_cache_flush();
+		if (wp_cache_supports( 'flush_group' ) ) {
+			wp_cache_flush_group( 'posts' );
+			wp_cache_flush_group( 'terms' );
+		} else {
+			wp_cache_flush();
+		}
 
 		do_action( 'scp_update_menu_order' );
 	}
@@ -422,7 +427,12 @@ class SCPO_Engine {
 			}
 		}
 
-		wp_cache_flush();
+		if ( wp_cache_supports( 'flush_group' ) ) {
+			wp_cache_flush_group( 'posts' );
+			wp_cache_flush_group( 'terms' );
+		} else {
+			wp_cache_flush();
+		}
 
 		do_action( 'scp_update_menu_order_tags' );
 
