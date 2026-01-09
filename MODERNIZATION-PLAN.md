@@ -144,7 +144,7 @@ Add PSR-4 autoloading with fallback for non-Composer installs.
 
 Now that we're using Settings API, consider:
 
-- [ ] **Add Settings Link** - Add "Settings" link to plugin row on plugins page
+- [x] **Add Settings Link** - Add "Settings" link to plugin row on plugins page
 - [ ] **Admin Success Notice** - Show WordPress admin notice after saving (Settings API provides this automatically)
 - [ ] **Reset Confirmation** - Add JavaScript confirmation dialog before reset
 

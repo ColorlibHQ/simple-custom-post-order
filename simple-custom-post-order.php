@@ -78,6 +78,8 @@ class SCPO_Engine {
 		add_filter( 'scpo_post_types_args', array( $this, 'scpo_filter_post_types' ), 10, 2 );
 
 		add_action( 'wp_ajax_scpo_reset_order', array( $this, 'scpo_ajax_reset_order' ) );
+
+		add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), array( $this, 'add_settings_link' ) );
 	}
 
 	public function load_dependencies(): void {
@@ -200,6 +202,22 @@ class SCPO_Engine {
 
 	public function admin_page(): void {
 		require SCPORDER_DIR . 'settings.php';
+	}
+
+	/**
+	 * Add Settings link to plugin action links on Plugins page.
+	 *
+	 * @param array $links Existing plugin action links.
+	 * @return array Modified plugin action links.
+	 */
+	public function add_settings_link( array $links ): array {
+		$settings_link = sprintf(
+			'<a href="%s">%s</a>',
+			esc_url( admin_url( 'options-general.php?page=scporder-settings' ) ),
+			esc_html__( 'Settings', 'simple-custom-post-order' )
+		);
+		array_unshift( $links, $settings_link );
+		return $links;
 	}
 
 	/**

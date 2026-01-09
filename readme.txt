@@ -234,6 +234,7 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 * Removed 100+ lines of custom CSS - now uses native WordPress admin styles
 * Improved accessibility with proper ARIA roles and screen reader text
 * Settings now integrate seamlessly with WordPress core admin UI
+* Added "Settings" link to plugin action links on the Plugins page
 
 **Security Enhancements**
 
