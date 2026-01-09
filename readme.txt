@@ -4,7 +4,7 @@ Tags: custom post order, post order, js post order, page order, posts order
 Requires at least: 6.2
 Requires PHP: 7.2.5
 Tested up to: 6.9
-Stable tag: 2.5.10
+Stable tag: 2.5.11
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -35,6 +35,8 @@ An answer to that question.
 3. Settings
 
 == Changelog ==
+= Version 2.5.11 - 23.06.2025 =
+* Deactivated custom sort order on search results pages.
 
 = Version 2.5.10 - 04.12.2024 =
 * Fix Notice: _load_textdomain_just_in_time.
