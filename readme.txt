@@ -3,8 +3,8 @@ Contributors: silkalns
 Tags: post order, custom post order, sort posts, reorder posts, drag drop order
 Requires at least: 6.2
 Requires PHP: 7.4
-Tested up to: 6.9
-Stable tag: 2.6.0
+Tested up to: 7.0
+Stable tag: 2.6.1
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -225,6 +225,15 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 
 == Changelog ==
 
+= 2.6.1 - 2026-06-01 =
+
+**Compatibility**
+
+* Tested and confirmed compatible with WordPress 7.0
+* Updated "Tested up to" version to WordPress 7.0
+* Verified PHP 8.3 and 8.4 compatibility (no deprecated APIs in use)
+* Maintenance release — no functional changes
+
 = 2.6.0 - 2026-01-09 =
 
 **Settings Page Overhaul**
@@ -392,6 +401,9 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 * Initial release
 
 == Upgrade Notice ==
+
+= 2.6.1 =
+Confirmed compatible with WordPress 7.0. Maintenance release with no functional changes.
 
 = 2.6.0 =
 Major update with redesigned settings page using WordPress Settings API, security fixes (SQL injection, XSS), PHP 8.4 compatibility, and performance improvements. Recommended for all users.
