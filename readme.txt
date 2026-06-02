@@ -4,7 +4,7 @@ Tags: post order, custom post order, sort posts, reorder posts, drag drop order
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 7.0
-Stable tag: 2.7.0
+Stable tag: 2.7.1
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -250,6 +250,17 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 
 == Changelog ==
 
+= 2.7.1 - 2026-06-02 =
+
+**Bug fixes**
+
+* Fixed post order being scrambled on MariaDB / MySQL 8 when `menu_order` is re-normalized after gaps appear (e.g. after deleting an item). The gap-compacting step relied on a MySQL user-variable ranking whose evaluation order is undefined on those databases; re-numbering is now done deterministically in PHP. Props @alexgw and @sebastiencyr (#147 / #119).
+* Term queries that request a specific order with `orderby=include` are now respected instead of being overridden by the custom term order. Props @glebkema (#67 / #66).
+
+**Improvements**
+
+* Custom term ordering now applies when any queried taxonomy is sortable (previously only the first taxonomy in a multi-taxonomy query was checked) and keeps the caller's `orderby` as a fallback tiebreaker. Props @goaround (#104).
+
 = 2.7.0 - 2026-06-02 =
 
 **Modern Drag-and-Drop Engine (SortableJS)**
@@ -464,6 +475,9 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 * Initial release
 
 == Upgrade Notice ==
+
+= 2.7.1 =
+Bug-fix release: prevents post order from being scrambled on MariaDB / MySQL 8 during order normalization, and honors `orderby=include` term queries. Recommended for all users.
 
 = 2.7.0 =
 New modern drag-and-drop: smoother sorting, touch support, full keyboard accessibility, and visible save feedback. Fixes saving in reverse-proxy / custom-port / HTTPS setups and auto-recovers expired security tokens. Fully backward compatible — the classic jQuery sorter remains available as a fallback.

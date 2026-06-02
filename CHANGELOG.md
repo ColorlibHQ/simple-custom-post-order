@@ -5,6 +5,15 @@ WordPress.org-formatted history lives in [`readme.txt`](readme.txt); this file m
 recent releases in [Keep a Changelog](https://keepachangelog.com/) style and follows
 [Semantic Versioning](https://semver.org/).
 
+## [2.7.1] - 2026-06-02
+
+### Fixed
+- Post order could be scrambled on **MariaDB / MySQL 8** when `menu_order` was re-normalized after gaps appeared (e.g. after deleting an item). The gap-compacting step relied on a MySQL user-variable ranking (`@row_number`) whose evaluation order is undefined on those databases. Re-numbering is now done deterministically in PHP. Props [@alexgw](https://github.com/alexgw) & [@sebastiencyr](https://github.com/sebastiencyr) (#147, #119).
+- `get_terms()` / `wp_get_object_terms()` calls that request `orderby=include` are now honored instead of being overridden by the custom term order. Props [@glebkema](https://github.com/glebkema) (#67, #66).
+
+### Changed
+- Custom term ordering now applies when *any* queried taxonomy is sortable (previously only the first taxonomy in a multi-taxonomy query was checked) and keeps the caller's `orderby` as a fallback tiebreaker. Props [@goaround](https://github.com/goaround) (#104).
+
 ## [2.7.0] - 2026-06-02
 
 ### Added

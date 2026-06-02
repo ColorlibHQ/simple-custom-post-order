@@ -3,7 +3,7 @@
  * Plugin Name: Simple Custom Post Order
  * Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
  * Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
- * Version: 2.7.0
+ * Version: 2.7.1
  * Author: Colorlib
  * Author URI: https://colorlib.com/
  * Tested up to: 7.0
@@ -36,7 +36,7 @@
 
 define( 'SCPORDER_URL', plugins_url( '', __FILE__ ) );
 define( 'SCPORDER_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SCPORDER_VERSION', '2.7.0' );
+define( 'SCPORDER_VERSION', '2.7.1' );
 
 $scporder = new SCPO_Engine();
 
@@ -68,8 +68,10 @@ class SCPO_Engine {
 		add_filter( 'get_next_post_sort', array( $this, 'scporder_next_post_sort' ) );
 
 		add_filter( 'get_terms_orderby', array( $this, 'scporder_get_terms_orderby' ), 10, 3 );
-		add_filter( 'wp_get_object_terms', array( $this, 'scporder_get_object_terms' ), 10, 3 );
-		add_filter( 'get_terms', array( $this, 'scporder_get_object_terms' ), 10, 3 );
+		// `wp_get_object_terms` passes $args as the 4th arg, `get_terms` as the 3rd,
+		// so each hook gets its own thin wrapper that hands $args to the sorter.
+		add_filter( 'wp_get_object_terms', array( $this, 'scporder_get_object_terms' ), 10, 4 );
+		add_filter( 'get_terms', array( $this, 'scporder_get_terms' ), 10, 3 );
 
 		add_action( 'admin_notices', array( $this, 'scporder_notice_not_checked' ) );
 		add_action( 'wp_ajax_scporder_dismiss_notices', array( $this, 'dismiss_notices' ) );
@@ -384,22 +386,23 @@ class SCPO_Engine {
 					continue;
 				}
 
-				// Optimization with prepared statement for security
-				$object = sanitize_key( $object );
-				$wpdb->query( 'SET @row_number = 0;' );
-				$wpdb->query(
+				// Re-number menu_order into a gapless 1..N sequence, preserving the
+				// existing relative order. Done in PHP rather than via a single UPDATE
+				// using a MySQL user variable (@row_number): that "rank inside a derived
+				// table" trick has undefined evaluation order on MariaDB / MySQL 8 and
+				// could scramble the saved order (PR #147 / issue #119).
+				$object      = sanitize_key( $object );
+				$ordered_ids = $wpdb->get_col(
 					$wpdb->prepare(
-						"UPDATE $wpdb->posts as pt JOIN (
-							SELECT ID, (@row_number:=@row_number + 1) AS `rank`
-							FROM $wpdb->posts
-							WHERE post_type = %s AND post_status IN ( 'publish', 'pending', 'draft', 'private', 'future' )
-							ORDER BY menu_order ASC
-						) as pt2
-						ON pt.id = pt2.id
-						SET pt.menu_order = pt2.`rank`;",
+						"SELECT ID FROM $wpdb->posts
+						WHERE post_type = %s AND post_status IN ( 'publish', 'pending', 'draft', 'private', 'future' )
+						ORDER BY menu_order ASC",
 						$object
 					)
 				);
+				foreach ( $ordered_ids as $position => $id ) {
+					$wpdb->update( $wpdb->posts, [ 'menu_order' => $position + 1 ], [ 'ID' => (int) $id ] );
+				}
 
 			}
 		}
@@ -1142,36 +1145,80 @@ class SCPO_Engine {
 			return $orderby;
 		}
 
+		// Honor an explicit `include` ordering requested by the caller (PR #67 / issue #66).
+		if ( isset( $args['orderby'] ) && 'include' === $args['orderby'] ) {
+			return $orderby;
+		}
+
 		$tags = $this->get_scporder_options_tags();
 
-		if ( ! isset( $args['taxonomy'] ) ) {
+		if ( empty( $tags ) || ! isset( $args['taxonomy'] ) ) {
 			return $orderby;
 		}
 
-		if ( is_array( $args['taxonomy'] ) ) {
-			$taxonomy = $args['taxonomy'][0] ?? false;
-		} else {
-			$taxonomy = $args['taxonomy'];
-		}
-
-		if ( ! in_array( $taxonomy, $tags, true ) ) {
+		// Apply our ordering if ANY queried taxonomy is sortable — not just the
+		// first one — and keep the caller's orderby as a fallback tiebreaker (PR #104).
+		$taxonomies = array_map( 'strval', (array) $args['taxonomy'] );
+		if ( empty( array_intersect( $taxonomies, $tags ) ) ) {
 			return $orderby;
 		}
 
-		return 't.term_order';
+		return '' !== $orderby ? 't.term_order, ' . $orderby : 't.term_order';
 	}
 
-	public function scporder_get_object_terms( array $terms ): array {
-		$tags = $this->get_scporder_options_tags();
+	/**
+	 * Filter callback for `wp_get_object_terms` (passes $args as the 4th argument).
+	 *
+	 * @param mixed $terms       Terms (array of objects, IDs, etc.).
+	 * @param mixed $object_ids  Unused.
+	 * @param mixed $taxonomies  Unused.
+	 * @param array $args        Query args.
+	 * @return mixed
+	 */
+	public function scporder_get_object_terms( $terms, $object_ids = null, $taxonomies = null, $args = array() ) {
+		return $this->sort_terms_by_order( $terms, is_array( $args ) ? $args : array() );
+	}
 
+	/**
+	 * Filter callback for `get_terms` (passes $args as the 3rd argument).
+	 *
+	 * @param mixed $terms      Terms.
+	 * @param mixed $taxonomies Unused.
+	 * @param array $args       Query args.
+	 * @return mixed
+	 */
+	public function scporder_get_terms( $terms, $taxonomies = null, $args = array() ) {
+		return $this->sort_terms_by_order( $terms, is_array( $args ) ? $args : array() );
+	}
+
+	/**
+	 * Re-sort returned terms by term_order, unless the caller asked for a specific
+	 * order. Shared by the get_terms / wp_get_object_terms callbacks above.
+	 *
+	 * @param mixed $terms Terms as returned by core.
+	 * @param array $args  Query args.
+	 * @return mixed
+	 */
+	private function sort_terms_by_order( $terms, array $args ) {
+		if ( ! is_array( $terms ) || empty( $terms ) ) {
+			return $terms;
+		}
+
+		// Admin column sorting wins.
 		if ( is_admin() && ! wp_doing_ajax() && isset( $_GET['orderby'] ) ) {
 			return $terms;
 		}
 
+		// Honor an explicit `include` ordering requested by the caller (PR #67 / issue #66).
+		if ( isset( $args['orderby'] ) && 'include' === $args['orderby'] ) {
+			return $terms;
+		}
+
+		$tags = $this->get_scporder_options_tags();
+
 		foreach ( $terms as $term ) {
 			if ( is_object( $term ) && isset( $term->taxonomy ) ) {
-				$taxonomy = $term->taxonomy;
-				if ( ! in_array( $taxonomy, $tags, true ) ) {
+				if ( ! in_array( $term->taxonomy, $tags, true ) ) {
 					return $terms;
 				}
 			} else {
