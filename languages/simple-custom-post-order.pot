@@ -1,0 +1,287 @@
+# Copyright (C) 2026 Colorlib
+# This file is distributed under the GPLv3 or later.
+msgid ""
+msgstr ""
+"Project-Id-Version: Simple Custom Post Order 2.7.0\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/simple-custom-post-order\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2026-06-02T10:37:20+00:00\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.12.0\n"
+"X-Domain: simple-custom-post-order\n"
+
+#. Plugin Name of the plugin
+#: simple-custom-post-order.php
+#: simple-custom-post-order.php:141
+#: simple-custom-post-order.php:196
+msgid "Simple Custom Post Order"
+msgstr ""
+
+#. Plugin URI of the plugin
+#: simple-custom-post-order.php
+msgid "https://wordpress.org/plugins-wp/simple-custom-post-order/"
+msgstr ""
+
+#. Description of the plugin
+#: simple-custom-post-order.php
+msgid "Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript."
+msgstr ""
+
+#. Author of the plugin
+#: simple-custom-post-order.php
+msgid "Colorlib"
+msgstr ""
+
+#. Author URI of the plugin
+#: simple-custom-post-order.php
+msgid "https://colorlib.com/"
+msgstr ""
+
+#: class-simple-review.php:28
+msgid "Hi there! Stoked to see you're using Simple Custom Post Order for a few days now - hope you like it! And if you do, please consider rating it. It would mean the world to us.  Keep on rocking!"
+msgstr ""
+
+#: class-simple-review.php:29
+msgid "Rate the plugin"
+msgstr ""
+
+#: class-simple-review.php:30
+msgid "Remind me later"
+msgstr ""
+
+#: class-simple-review.php:31
+msgid "Don't show again"
+msgstr ""
+
+#: settings.php:26
+msgid "Save Changes"
+msgstr ""
+
+#: settings.php:32
+msgid "Reset Post Order"
+msgstr ""
+
+#: settings.php:33
+msgid "Select post types to reset their custom order back to default (by date for posts, alphabetical for pages)."
+msgstr ""
+
+#: settings.php:39
+#: settings.php:42
+msgid "Post Types to Reset"
+msgstr ""
+
+#: settings.php:75
+msgid "Reset Order"
+msgstr ""
+
+#: settings.php:83
+msgid "Support"
+msgstr ""
+
+#. translators: 1: link to reviews, 2: link to Colorlib
+#: settings.php:88
+#, php-format
+msgid "Enjoying this plugin? Please %1$s on WordPress.org! For support, visit %2$s."
+msgstr ""
+
+#: settings.php:89
+msgid "leave a review"
+msgstr ""
+
+#: settings.php:109
+msgid "Please select at least one post type to reset."
+msgstr ""
+
+#: settings.php:119
+msgid "Resetting..."
+msgstr ""
+
+#: settings.php:138
+#: settings.php:143
+msgid "An error occurred."
+msgstr ""
+
+#: simple-custom-post-order.php:143
+msgid "Thank you for installing our awesome plugin, in order to enable it you need to go to the settings page and select which custom post or taxonomy you want to order."
+msgstr ""
+
+#: simple-custom-post-order.php:145
+msgid "Get started !"
+msgstr ""
+
+#: simple-custom-post-order.php:146
+msgid "Dismiss this notice."
+msgstr ""
+
+#: simple-custom-post-order.php:197
+msgid "SCPOrder"
+msgstr ""
+
+#: simple-custom-post-order.php:218
+msgid "Settings"
+msgstr ""
+
+#: simple-custom-post-order.php:312
+msgid "Saving order…"
+msgstr ""
+
+#: simple-custom-post-order.php:313
+msgid "Order saved"
+msgstr ""
+
+#: simple-custom-post-order.php:314
+msgid "Couldn’t save — please try again"
+msgstr ""
+
+#. translators: %1$s: item title.
+#: simple-custom-post-order.php:316
+#, php-format
+msgid "Reorder: %1$s"
+msgstr ""
+
+#. translators: 1: item title, 2: current row number, 3: total rows.
+#: simple-custom-post-order.php:318
+#, php-format
+msgid "Grabbed %1$s. Row %2$d of %3$d. Use the arrow keys to move, Space to drop, Escape to cancel."
+msgstr ""
+
+#. translators: 1: item title, 2: current row number, 3: total rows.
+#: simple-custom-post-order.php:320
+#, php-format
+msgid "%1$s. Row %2$d of %3$d."
+msgstr ""
+
+#. translators: 1: item title, 2: final row number, 3: total rows.
+#: simple-custom-post-order.php:322
+#, php-format
+msgid "%1$s dropped. Row %2$d of %3$d."
+msgstr ""
+
+#. translators: 1: item title, 2: restored row number, 3: total rows.
+#: simple-custom-post-order.php:324
+#, php-format
+msgid "Reorder cancelled. %1$s returned to row %2$d of %3$d."
+msgstr ""
+
+#: simple-custom-post-order.php:453
+#: simple-custom-post-order.php:529
+#: simple-custom-post-order.php:614
+#: simple-custom-post-order.php:1221
+msgid "Permission denied."
+msgstr ""
+
+#: simple-custom-post-order.php:460
+#: simple-custom-post-order.php:536
+msgid "Invalid data."
+msgstr ""
+
+#: simple-custom-post-order.php:515
+#: simple-custom-post-order.php:591
+msgid "Order updated."
+msgstr ""
+
+#: simple-custom-post-order.php:646
+msgid "Sortable Post Types"
+msgstr ""
+
+#: simple-custom-post-order.php:653
+#: simple-custom-post-order.php:669
+msgid "Enable sorting for:"
+msgstr ""
+
+#: simple-custom-post-order.php:662
+msgid "Sortable Taxonomies"
+msgstr ""
+
+#: simple-custom-post-order.php:678
+msgid "Drag & Drop Engine"
+msgstr ""
+
+#: simple-custom-post-order.php:685
+#: simple-custom-post-order.php:945
+msgid "Sorting engine"
+msgstr ""
+
+#: simple-custom-post-order.php:693
+msgid "Drag handle"
+msgstr ""
+
+#: simple-custom-post-order.php:702
+msgid "Advanced Options"
+msgstr ""
+
+#: simple-custom-post-order.php:709
+msgid "Advanced View"
+msgstr ""
+
+#: simple-custom-post-order.php:842
+msgid "Select which post types should have drag-and-drop sorting enabled."
+msgstr ""
+
+#: simple-custom-post-order.php:864
+msgid "Post Types"
+msgstr ""
+
+#: simple-custom-post-order.php:889
+msgid "Select which taxonomies should have drag-and-drop sorting enabled."
+msgstr ""
+
+#: simple-custom-post-order.php:903
+msgid "Taxonomies"
+msgstr ""
+
+#: simple-custom-post-order.php:928
+msgid "Choose how drag-and-drop reordering behaves. Saving works identically either way — only the interface differs."
+msgstr ""
+
+#: simple-custom-post-order.php:950
+msgid "Modern — smooth animation, touch & keyboard support, save feedback (recommended)"
+msgstr ""
+
+#: simple-custom-post-order.php:955
+msgid "Classic — legacy jQuery UI (use only if the modern engine causes a problem)"
+msgstr ""
+
+#: simple-custom-post-order.php:959
+msgid "A theme or plugin is currently overriding this choice via the scpo_use_sortablejs filter, so the option above may not reflect what loads."
+msgstr ""
+
+#: simple-custom-post-order.php:961
+msgid "Developers can override this per-site with the scpo_use_sortablejs filter."
+msgstr ""
+
+#: simple-custom-post-order.php:993
+msgid "Show this drag handle when hovering a row"
+msgstr ""
+
+#: simple-custom-post-order.php:996
+msgid "Rows stay draggable from anywhere — this just adds the grip icon as a hover cue. Keyboard users can always reveal the handle by tabbing to a row, so turning this off does not affect accessibility. Applies to the Modern engine."
+msgstr ""
+
+#: simple-custom-post-order.php:1006
+msgid "Configure advanced plugin options."
+msgstr ""
+
+#: simple-custom-post-order.php:1021
+msgid "Show all registered post types (including hidden ones)"
+msgstr ""
+
+#: simple-custom-post-order.php:1023
+msgid "Enable this to see post types that are normally hidden from the admin menu. For advanced users only."
+msgstr ""
+
+#: simple-custom-post-order.php:1229
+msgid "No items selected."
+msgstr ""
+
+#: simple-custom-post-order.php:1248
+msgid "Items have been reset."
+msgstr ""
+
+#: simple-custom-post-order.php:1250
+msgid "Failed to reset items."
+msgstr ""

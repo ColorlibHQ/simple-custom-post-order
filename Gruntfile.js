@@ -95,7 +95,10 @@ module.exports = function(grunt) {
               '!composer.lock',
               '!set_tags.sh',
               '!simple-custom-post-order.zip',
-              '!nbproject/**' ],
+              '!nbproject/**',
+              '!CLAUDE.md',
+              '!MODERNIZATION-PLAN.md',
+              '!.claude/**' ],
           dest: 'build/'
       }
     },
@@ -121,6 +124,17 @@ module.exports = function(grunt) {
 			} ]
 		}
 	},
+    cssmin: {
+        target: {
+            files: [ {
+                expand: true,
+                cwd: 'assets/',
+                src: [ '*.css', '!*.min.css' ],
+                dest: 'assets/',
+                ext: '.min.css'
+            } ]
+        }
+    },
     compress: {
         build: {
             options: {
@@ -144,8 +158,9 @@ module.exports = function(grunt) {
       'compress:build',
       'clean:init'
   ]);
-  grunt.registerTask( 'minjs', [  // Minify CSS
+  grunt.registerTask( 'minjs', [  // Minify JS + CSS
 		'clean:jsmin',
 		'uglify',
+		'cssmin',
 	] );
 };

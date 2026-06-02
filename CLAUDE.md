@@ -9,7 +9,7 @@ Simple Custom Post Order is a WordPress plugin that enables drag-and-drop reorde
 ## Build Commands
 
 ```bash
-# Minify JavaScript files
+# Minify admin assets — JS (uglify) + CSS (cssmin)
 grunt minjs
 
 # Generate/update translation files
@@ -28,8 +28,9 @@ The plugin is a single monolithic `SCPO_Engine` class (~1100 lines) that does ev
 - **simple-custom-post-order.php** — The `SCPO_Engine` class plus standalone `scporder_doing_ajax()`, `scporder_uninstall()`, and `scporder_uninstall_db()` functions. Instantiated immediately as the global `$scporder`.
 - **settings.php** — Only the settings *page shell* (`do_settings_sections()`), the Reset Order form, and the Support section. The actual settings fields are registered and rendered via the **WordPress Settings API inside `SCPO_Engine`** (`register_settings()`, `render_post_types_field()`, `sanitize_options()`, etc.) — not here.
 - **class-simple-review.php** — Self-instantiating `Simple_Review` class; WordPress.org rating nag, fully independent of `SCPO_Engine`. Uses the legacy `epsilon_simple_review` AJAX action / `simple-rate-time` option.
-- **assets/scporder.js** — jQuery UI Sortable for **both** posts/pages (`table.posts/pages #the-list`) **and** taxonomies (`table.tags #the-list`). This is the only sorting script that ships.
-- **assets/taxonomy_order.js** — ⚠️ **Dead code.** Not enqueued anywhere (references undefined `adminpage`/`get_inline_boxes`). Taxonomy sorting lives in `scporder.js`. Don't edit this file expecting an effect.
+- **assets/scporder-sortablejs.js** — ⭐ **The default sorter** (since 2.7.0). Vanilla JS layer on top of SortableJS (`assets/vendor/Sortable.min.js`). Drives posts/pages (`table.posts/pages #the-list`) and taxonomies (`table.tags #the-list`): whole-row mouse/touch drag, keyboard + screen-reader reordering (focus-revealed grip handle), save toast, single-flight save queue with retry, same-origin AJAX, and nonce auto-refresh. Enqueued as `scporder-sortablejs.min.js` (source only under `SCRIPT_DEBUG`).
+- **assets/scporder.css** — Admin styles for the SortableJS path (grip handle + its show/hover/focus states, save toast, drag classes, reduced-motion). Enqueued as `scporder.min.css`.
+- **assets/scporder.js** — Legacy **jQuery UI Sortable** path, retained as an opt-out fallback (Settings → engine "Classic", or `scpo_use_sortablejs` filter → `false`). Enqueued as `scporder.min.js`. Fire-and-forget AJAX, no UI feedback. (The old dead `taxonomy_order.js` was removed in 2.7.0.)
 
 ### How ordering actually works (the non-obvious core)
 
@@ -43,13 +44,15 @@ Saving order is the easy half (AJAX writes `menu_order`/`term_order`). The harde
 
 ### Asset loading gate
 
-`load_script_css()` only enqueues the sorter on specific admin list screens, gated by `_check_load_script_css()` (checks enabled `objects`/`tags` against `$_GET['post_type']`/`taxonomy`/request URI; bails on edit/new/`orderby` views). It enqueues **`scporder.min.js`**, not the source — so **you must run `grunt minjs` after editing `assets/scporder.js`** or changes won't load. Data is passed in via `wp_localize_script` as `scporder_vars` (`ajax_url`, `nonce`).
+`load_script_css()` only enqueues the sorter on specific admin list screens, gated by `_check_load_script_css()` (checks enabled `objects`/`tags` against `$_GET['post_type']`/`taxonomy`/request URI; bails on edit/new/`orderby` views). It chooses the engine — SortableJS by default, or the jQuery path when the `engine` option is `'classic'` — overridable via the `scpo_use_sortablejs` filter (the filter wins over the stored option). It enqueues **minified** assets (`*.min.js`/`*.min.css`), falling back to source only when `SCRIPT_DEBUG` is on — so **run `grunt minjs` after editing `assets/scporder-sortablejs.js` or `assets/scporder.css`** or changes won't load.
+
+Data is passed via `wp_localize_script` as `scporder_vars`: `ajax_url` (a **root-relative, same-origin** admin-ajax path from `get_ajax_url()` — never an absolute `admin_url()`, so saves stay same-origin behind proxies / non-standard ports / scheme mismatches), `nonce`, `showHandle` (`'1'`/`''`), and `i18n` (toast + a11y strings).
 
 ### Data Storage
 
 - **Posts/Pages**: native `menu_order` column in `wp_posts`.
 - **Taxonomies**: custom `term_order` column added to `wp_terms` via `ALTER TABLE` on install (`scporder_install()`), dropped on uninstall (`scporder_uninstall_db()`, multisite-aware). Presence is detected with `DESCRIBE`.
-- **Settings**: `scporder_options` option — an array with keys `objects` (post type slugs), `tags` (taxonomy slugs), and `show_advanced_view` (`'1'`/`''`). Plus flag options `scporder_install` and `scporder_notice`.
+- **Settings**: `scporder_options` option — an array with keys `objects` (post type slugs), `tags` (taxonomy slugs), `show_advanced_view` (`'1'`/`''`), `engine` (`'sortable'` default / `'classic'`), and `show_handle` (`'1'` default / `'0'`). Plus flag options `scporder_install` and `scporder_notice`.
 
 ### AJAX endpoints, nonces, capabilities
 
@@ -59,14 +62,16 @@ Saving order is the easy half (AJAX writes `menu_order`/`term_order`). The harde
 | `update-menu-order-tags` | `scporder_nonce_action` / `nonce` | `edit_posts` | Save term order |
 | `scpo_reset_order` | `scpo-reset-order` / `scpo_security` | `manage_options` | Reset types to default + remove from `objects` |
 | `scporder_dismiss_notices` | `scporder_dismiss_notice` / `scporder_nonce` | (admin notice) | Dismiss setup nag |
+| `scpo_refresh_nonce` | none — intentional (see below) | `edit_posts` | Mint a fresh reorder nonce so the SortableJS client can transparently retry a save after the page nonce expires |
 
-All handlers use `check_ajax_referer()`, capability checks, `$wpdb->prepare()`, and respond via `wp_send_json_success()`/`wp_send_json_error()`. Reorder handlers preserve the existing *set* of `menu_order`/`term_order` values and reassign them positionally (so the existing values are kept, only the row→value mapping changes).
+All handlers use `check_ajax_referer()`, capability checks, `$wpdb->prepare()`, and respond via `wp_send_json_success()`/`wp_send_json_error()` — **except `scpo_refresh_nonce`, which deliberately does *not* verify a nonce** (the stale nonce is the very reason it's called). That's safe because it is an authenticated (`wp_ajax_`, non-`nopriv`) action gated on `edit_posts`, and admin-ajax sends no CORS headers, so the issued nonce can't be read cross-origin — the same model WordPress core's Heartbeat uses to refresh nonces. Reorder handlers preserve the existing *set* of `menu_order`/`term_order` values and reassign them positionally (so the existing values are kept, only the row→value mapping changes).
 
 ### Extensibility (preserve these — backward-compat contract)
 
 - Filter `scpo_post_types_args` (`$args, $options`) — modify which post types appear in settings. The plugin's own `scpo_filter_post_types()` uses it to drop `show_in_menu` when `show_advanced_view` is on.
+- Filter `scpo_use_sortablejs` (`bool`, default from the `engine` option) — force the drag engine in code; `true` = SortableJS, `false` = jQuery UI. Overrides the user's setting.
 - Actions `scp_update_menu_order` / `scp_update_menu_order_tags` — fire after a successful reorder.
-- Global `$scporder` and the `scporder_options` structure are part of the public contract.
+- Global `$scporder` and the `scporder_options` structure are part of the public contract (the `engine`/`show_handle` keys were added in 2.7.0 with backward-compatible defaults).
 
 ## Requirements
 

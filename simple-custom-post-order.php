@@ -3,7 +3,7 @@
  * Plugin Name: Simple Custom Post Order
  * Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
  * Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
- * Version: 2.6.1
+ * Version: 2.7.0
  * Author: Colorlib
  * Author URI: https://colorlib.com/
  * Tested up to: 7.0
@@ -36,7 +36,7 @@
 
 define( 'SCPORDER_URL', plugins_url( '', __FILE__ ) );
 define( 'SCPORDER_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SCPORDER_VERSION', '2.6.1' );
+define( 'SCPORDER_VERSION', '2.7.0' );
 
 $scporder = new SCPO_Engine();
 
@@ -58,6 +58,7 @@ class SCPO_Engine {
 
 		add_action( 'wp_ajax_update-menu-order', array( $this, 'update_menu_order' ) );
 		add_action( 'wp_ajax_update-menu-order-tags', array( $this, 'update_menu_order_tags' ) );
+		add_action( 'wp_ajax_scpo_refresh_nonce', array( $this, 'refresh_nonce' ) );
 
 		add_action( 'pre_get_posts', array( $this, 'scporder_pre_get_posts' ) );
 
@@ -268,16 +269,91 @@ class SCPO_Engine {
 	 * @return void
 	 */
 	public function load_script_css(): void {
-		if ( $this->_check_load_script_css() ) {
+		if ( ! $this->_check_load_script_css() ) {
+			return;
+		}
+
+		/**
+		 * Which drag-and-drop engine to load. The user's choice in
+		 * Settings → SCPOrder ("Drag & Drop Engine") provides the default; the
+		 * `scpo_use_sortablejs` filter overrides it, so developers can force one
+		 * engine per-site / per-network regardless of the stored setting.
+		 *
+		 * SortableJS (default): native touch, smoother animation, no jQuery UI,
+		 * visible save feedback, keyboard + screen-reader support. The classic
+		 * jQuery UI path remains as an opt-out fallback.
+		 *
+		 * @param bool $use_sortablejs Default derived from the saved engine option.
+		 */
+		$options        = get_option( 'scporder_options', [] );
+		$engine_default = ! ( isset( $options['engine'] ) && 'classic' === $options['engine'] );
+		$use_sortablejs = (bool) apply_filters( 'scpo_use_sortablejs', $engine_default );
+
+		// Serve minified assets; fall back to readable source under SCRIPT_DEBUG.
+		$suffix = ( defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG ) ? '' : '.min';
+
+		if ( $use_sortablejs ) {
+			wp_enqueue_script( 'scpo-sortablejs', SCPORDER_URL . '/assets/vendor/Sortable.min.js', [], '1.15.7', true );
+			wp_enqueue_script( 'scporderjs', SCPORDER_URL . "/assets/scporder-sortablejs{$suffix}.js", [ 'scpo-sortablejs' ], SCPORDER_VERSION, true );
+			wp_enqueue_style( 'scpo-admin', SCPORDER_URL . "/assets/scporder{$suffix}.css", [], SCPORDER_VERSION );
+		} else {
 			wp_enqueue_script( 'jquery' );
 			wp_enqueue_script( 'jquery-ui-sortable' );
-			wp_enqueue_script( 'scporderjs', SCPORDER_URL . '/assets/scporder.min.js', [ 'jquery' ], SCPORDER_VERSION, true );
-			wp_localize_script( 'scporderjs', 'scporder_vars', [
-				'ajax_url' => admin_url( 'admin-ajax.php' ),
-				'nonce'    => wp_create_nonce( 'scporder_nonce_action' ),
-			] );
+			wp_enqueue_script( 'scporderjs', SCPORDER_URL . "/assets/scporder{$suffix}.js", [ 'jquery' ], SCPORDER_VERSION, true );
 			add_action( 'admin_print_styles', [ $this, 'print_scpo_style' ] );
 		}
+
+		// Localized for both paths (the jQuery version simply ignores i18n).
+		wp_localize_script( 'scporderjs', 'scporder_vars', [
+			'ajax_url' => $this->get_ajax_url(),
+			'nonce'    => wp_create_nonce( 'scporder_nonce_action' ),
+			'showHandle' => ( ! isset( $options['show_handle'] ) || '0' !== $options['show_handle'] ) ? '1' : '',
+			'i18n'     => [
+				'saving'       => __( 'Saving order…', 'simple-custom-post-order' ),
+				'saved'        => __( 'Order saved', 'simple-custom-post-order' ),
+				'error'        => __( 'Couldn’t save — please try again', 'simple-custom-post-order' ),
+				/* translators: %1$s: item title. */
+				'reorderLabel' => __( 'Reorder: %1$s', 'simple-custom-post-order' ),
+				/* translators: 1: item title, 2: current row number, 3: total rows. */
+				'grabbed'      => __( 'Grabbed %1$s. Row %2$d of %3$d. Use the arrow keys to move, Space to drop, Escape to cancel.', 'simple-custom-post-order' ),
+				/* translators: 1: item title, 2: current row number, 3: total rows. */
+				'moved'        => __( '%1$s. Row %2$d of %3$d.', 'simple-custom-post-order' ),
+				/* translators: 1: item title, 2: final row number, 3: total rows. */
+				'dropped'      => __( '%1$s dropped. Row %2$d of %3$d.', 'simple-custom-post-order' ),
+				/* translators: 1: item title, 2: restored row number, 3: total rows. */
+				'cancelled'    => __( 'Reorder cancelled. %1$s returned to row %2$d of %3$d.', 'simple-custom-post-order' ),
+			],
+		] );
+	}
+
+	/**
+	 * Root-relative admin-ajax URL for the reorder request.
+	 *
+	 * An absolute admin_url() is built from the `siteurl` option, which is not
+	 * guaranteed to match the origin the admin is actually being viewed from
+	 * (non-standard ports, reverse proxies / load balancers, http↔https
+	 * mismatches, IP-vs-domain access, staging mirrors). When it doesn't match,
+	 * the browser treats the save as cross-origin: the auth cookie is withheld
+	 * and the response is blocked, so the reorder silently never persists.
+	 *
+	 * A root-relative path ("/wp-admin/admin-ajax.php") is always resolved by
+	 * the browser against the current page's origin, so the request is
+	 * guaranteed same-origin on every install layout (including subdirectory
+	 * and multisite, whose admin path is preserved here). Falls back to the
+	 * absolute URL only if the path can't be parsed.
+	 *
+	 * @return string
+	 */
+	private function get_ajax_url(): string {
+		$url   = admin_url( 'admin-ajax.php' );
+		$path  = wp_parse_url( $url, PHP_URL_PATH );
+		$query = wp_parse_url( $url, PHP_URL_QUERY );
+
+		if ( ! is_string( $path ) || '' === $path ) {
+			return $url;
+		}
+
+		return $query ? $path . '?' . $query : $path;
 	}
 
 	public function refresh(): void {
@@ -515,6 +591,32 @@ class SCPO_Engine {
 		wp_send_json_success( [ 'message' => __( 'Order updated.', 'simple-custom-post-order' ) ] );
 	}
 
+	/**
+	 * Issue a fresh reorder nonce.
+	 *
+	 * A nonce embedded at page load expires (12–24h by default, often far less
+	 * when a security plugin shortens nonce_life). When that happens a reorder
+	 * save is rejected with "-1" and the client calls this endpoint to obtain a
+	 * fresh nonce and transparently retry — so a long-open edit screen still
+	 * saves without the user reloading.
+	 *
+	 * This handler intentionally does NOT verify a nonce (the stale nonce is the
+	 * very reason it's called). It is safe because it is an authenticated action
+	 * (wp_ajax_, not nopriv) gated on the same `edit_posts` capability as the
+	 * reorder endpoints, and admin-ajax sends no CORS headers, so the issued
+	 * nonce cannot be read by a cross-origin attacker. This mirrors how core's
+	 * Heartbeat API refreshes nonces.
+	 *
+	 * @return void
+	 */
+	public function refresh_nonce(): void {
+		if ( ! current_user_can( 'edit_posts' ) ) {
+			wp_send_json_error( [ 'message' => __( 'Permission denied.', 'simple-custom-post-order' ) ], 403 );
+		}
+
+		wp_send_json_success( [ 'nonce' => wp_create_nonce( 'scporder_nonce_action' ) ] );
+	}
+
 
 	/**
 	 * Register plugin settings using WordPress Settings API.
@@ -532,6 +634,8 @@ class SCPO_Engine {
 					'objects'            => [],
 					'tags'               => [],
 					'show_advanced_view' => '',
+					'engine'             => 'sortable',
+					'show_handle'        => '1',
 				],
 			]
 		);
@@ -568,6 +672,30 @@ class SCPO_Engine {
 			'scporder_taxonomies_section'
 		);
 
+		// Drag & Drop Engine Section
+		add_settings_section(
+			'scporder_engine_section',
+			__( 'Drag & Drop Engine', 'simple-custom-post-order' ),
+			[ $this, 'render_engine_section' ],
+			'scporder-settings'
+		);
+
+		add_settings_field(
+			'scporder_engine',
+			__( 'Sorting engine', 'simple-custom-post-order' ),
+			[ $this, 'render_engine_field' ],
+			'scporder-settings',
+			'scporder_engine_section'
+		);
+
+		add_settings_field(
+			'scporder_show_handle',
+			__( 'Drag handle', 'simple-custom-post-order' ),
+			[ $this, 'render_handle_field' ],
+			'scporder-settings',
+			'scporder_engine_section'
+		);
+
 		// Advanced Section
 		add_settings_section(
 			'scporder_advanced_section',
@@ -598,6 +726,8 @@ class SCPO_Engine {
 			'objects'            => [],
 			'tags'               => [],
 			'show_advanced_view' => '',
+			'engine'             => 'sortable',
+			'show_handle'        => '1',
 		];
 
 		// Sanitize post types (objects)
@@ -614,6 +744,13 @@ class SCPO_Engine {
 		if ( ! empty( $input['show_advanced_view'] ) ) {
 			$sanitized['show_advanced_view'] = '1';
 		}
+
+		// Sanitize drag-and-drop engine choice (anything but 'classic' is the default).
+		$sanitized['engine'] = ( isset( $input['engine'] ) && 'classic' === $input['engine'] ) ? 'classic' : 'sortable';
+
+		// Show-drag-handle toggle. Unchecked checkboxes are absent from $input,
+		// so missing means "hide" ('0'); checked submits '1'.
+		$sanitized['show_handle'] = ! empty( $input['show_handle'] ) ? '1' : '0';
 
 		// Initialize menu_order for newly enabled post types
 		if ( ! empty( $sanitized['objects'] ) ) {
@@ -780,6 +917,84 @@ class SCPO_Engine {
 		}
 
 		echo '</fieldset>';
+	}
+
+	/**
+	 * Render drag-and-drop engine section description.
+	 *
+	 * @return void
+	 */
+	public function render_engine_section(): void {
+		echo '<p>' . esc_html__( 'Choose how drag-and-drop reordering behaves. Saving works identically either way — only the interface differs.', 'simple-custom-post-order' ) . '</p>';
+	}
+
+	/**
+	 * Render the drag-and-drop engine choice (Modern vs Classic).
+	 *
+	 * The stored choice is the default; a `scpo_use_sortablejs` filter added by
+	 * a theme/plugin overrides it at runtime, which we surface to the admin.
+	 *
+	 * @return void
+	 */
+	public function render_engine_field(): void {
+		$options = get_option( 'scporder_options', [] );
+		$engine  = ( isset( $options['engine'] ) && 'classic' === $options['engine'] ) ? 'classic' : 'sortable';
+		$forced  = has_filter( 'scpo_use_sortablejs' );
+
+		echo '<fieldset>';
+		echo '<legend class="screen-reader-text"><span>' . esc_html__( 'Sorting engine', 'simple-custom-post-order' ) . '</span></legend>';
+
+		printf(
+			'<label><input type="radio" name="scporder_options[engine]" value="sortable" %s /> %s</label><br />',
+			checked( 'sortable', $engine, false ),
+			esc_html__( 'Modern — smooth animation, touch & keyboard support, save feedback (recommended)', 'simple-custom-post-order' )
+		);
+		printf(
+			'<label><input type="radio" name="scporder_options[engine]" value="classic" %s /> %s</label>',
+			checked( 'classic', $engine, false ),
+			esc_html__( 'Classic — legacy jQuery UI (use only if the modern engine causes a problem)', 'simple-custom-post-order' )
+		);
+
+		if ( $forced ) {
+			echo '<p class="description">' . esc_html__( 'A theme or plugin is currently overriding this choice via the scpo_use_sortablejs filter, so the option above may not reflect what loads.', 'simple-custom-post-order' ) . '</p>';
+		} else {
+			echo '<p class="description">' . esc_html__( 'Developers can override this per-site with the scpo_use_sortablejs filter.', 'simple-custom-post-order' ) . '</p>';
+		}
+
+		echo '</fieldset>';
+	}
+
+	/**
+	 * Render the "show drag handle" toggle, with a live preview of the grip icon.
+	 *
+	 * This only controls the *visible* (mouse-hover) grip. Rows stay draggable
+	 * from anywhere, and keyboard users can always reveal the handle by tabbing
+	 * to a row — so turning this off never affects accessibility. Applies to the
+	 * Modern (SortableJS) engine.
+	 *
+	 * @return void
+	 */
+	public function render_handle_field(): void {
+		$options = get_option( 'scporder_options', [] );
+		$show    = ! isset( $options['show_handle'] ) || '0' !== $options['show_handle'];
+
+		// Static, trusted markup (no user input) — the same grip the script injects.
+		$grip = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false" style="vertical-align:middle;fill:#787c82">'
+			. '<circle cx="5" cy="3" r="1.5"/><circle cx="11" cy="3" r="1.5"/>'
+			. '<circle cx="5" cy="8" r="1.5"/><circle cx="11" cy="8" r="1.5"/>'
+			. '<circle cx="5" cy="13" r="1.5"/><circle cx="11" cy="13" r="1.5"/></svg>';
+
+		echo '<fieldset><label>';
+		printf(
+			'<input type="checkbox" name="scporder_options[show_handle]" value="1" %s /> ',
+			checked( $show, true, false )
+		);
+		echo $grip . ' '; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static, trusted SVG icon.
+		echo esc_html__( 'Show this drag handle when hovering a row', 'simple-custom-post-order' );
+		echo '</label>';
+		echo '<p class="description">'
+			. esc_html__( 'Rows stay draggable from anywhere — this just adds the grip icon as a hover cue. Keyboard users can always reveal the handle by tabbing to a row, so turning this off does not affect accessibility. Applies to the Modern engine.', 'simple-custom-post-order' )
+			. '</p></fieldset>';
 	}
 
 	/**

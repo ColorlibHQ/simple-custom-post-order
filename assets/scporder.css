@@ -1,0 +1,186 @@
+/**
+ * Simple Custom Post Order — admin drag-and-drop styles (SortableJS path).
+ */
+
+/* Whole rows are draggable by mouse / touch; hint with a move cursor. */
+#the-list tr:hover {
+	cursor: move;
+}
+
+/* ---- Drag handle (grip dots) ----------------------------------------- */
+
+/* Resting state: visually hidden, but kept in the DOM and tab order so
+   keyboard users can always reach it — even when it's hidden for mouse users.
+   This is also the state when the "Show drag handle" setting is OFF. */
+.scpo-handle {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip: rect( 0, 0, 0, 0 );
+	clip-path: inset( 50% );
+	border: 0;
+	white-space: nowrap;
+	color: #787c82;
+	background: transparent;
+	cursor: grab;
+}
+
+.scpo-handle .scpo-grip {
+	width: 16px;
+	height: 16px;
+	fill: currentColor;
+	pointer-events: none;
+}
+
+/* HIDE mode: keyboard focus still reveals the handle inline (accessibility) —
+   brief, and only for the focused row. Mouse users see nothing. */
+.scpo-handle:focus,
+.scpo-handle:focus-visible {
+	position: static;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	margin: 0 4px 0 -4px;
+	overflow: visible;
+	clip: auto;
+	clip-path: none;
+	white-space: normal;
+	vertical-align: middle;
+	border-radius: 3px;
+	outline: 2px solid #2271b1;
+	outline-offset: 1px;
+}
+
+/* SHOW mode: reserve a slim gutter on the title cell and overlay the grip
+   there, OUT OF FLOW — so it never reflows the title or grows the row height.
+   It fades in on row hover or keyboard focus. Higher specificity than the HIDE
+   focus rule above, so the handle stays absolute (no jump) when focused. */
+.scpo-handles-visible .scpo-handle-cell {
+	position: relative;
+	padding-left: 26px;
+}
+
+.scpo-handles-visible .scpo-handle,
+.scpo-handles-visible .scpo-handle:focus,
+.scpo-handles-visible .scpo-handle:focus-visible {
+	position: absolute;
+	left: 2px;
+	top: 8px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	margin: 0;
+	overflow: visible;
+	clip: auto;
+	clip-path: none;
+	white-space: normal;
+	opacity: 0;
+	transition: opacity 0.12s ease;
+}
+
+.scpo-handles-visible tr:hover .scpo-handle,
+.scpo-handles-visible .scpo-handle:focus,
+.scpo-handles-visible .scpo-handle:focus-visible {
+	opacity: 1;
+}
+
+.scpo-handles-visible .scpo-handle:focus,
+.scpo-handles-visible .scpo-handle:focus-visible {
+	border-radius: 3px;
+	outline: 2px solid #2271b1;
+	outline-offset: 1px;
+}
+
+.scpo-handles-visible tr:hover .scpo-handle {
+	color: #1d2327;
+}
+
+/* The row currently "picked up" by the keyboard. */
+.scpo-grabbed {
+	outline: 2px dashed #2271b1;
+	background-color: #f0f6fc;
+}
+
+/* The row left behind in the list while dragging. */
+.scpo-ghost {
+	opacity: 0.35;
+}
+
+/* The row the pointer grabbed. */
+.scpo-chosen {
+	background-color: #f6f7f7;
+}
+
+/* The floating row that follows the pointer/finger. */
+.scpo-fallback {
+	background-color: #fff;
+	outline: 2px solid #2271b1; /* WP admin blue */
+	box-shadow: 0 6px 18px rgba( 0, 0, 0, 0.18 );
+	cursor: grabbing;
+}
+
+/* ---- Save-status toast ------------------------------------------------ */
+
+.scpo-toast {
+	position: fixed;
+	right: 20px;
+	bottom: 20px;
+	z-index: 100000;
+	max-width: 320px;
+	padding: 10px 16px;
+	border-radius: 4px;
+	background: #1d2327;
+	color: #fff;
+	font-size: 13px;
+	line-height: 1.5;
+	box-shadow: 0 2px 10px rgba( 0, 0, 0, 0.25 );
+	opacity: 0;
+	transform: translateY( 8px );
+	transition: opacity 0.2s ease, transform 0.2s ease;
+	pointer-events: none;
+}
+
+.scpo-toast.is-visible {
+	opacity: 1;
+	transform: translateY( 0 );
+}
+
+.scpo-toast--saving {
+	background: #2271b1;
+}
+
+.scpo-toast--saved {
+	background: #007a3d;
+}
+
+.scpo-toast--error {
+	background: #d63638;
+}
+
+@media ( prefers-reduced-motion: reduce ) {
+	.scpo-toast,
+	.scpo-handles-visible .scpo-handle {
+		transition: none;
+	}
+}
+
+/* Visually hidden live region for screen-reader move announcements. */
+.scpo-sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip: rect( 0, 0, 0, 0 );
+	clip-path: inset( 50% );
+	border: 0;
+	white-space: nowrap;
+}

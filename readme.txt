@@ -4,7 +4,7 @@ Tags: post order, custom post order, sort posts, reorder posts, drag drop order
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 7.0
-Stable tag: 2.6.1
+Stable tag: 2.7.0
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -20,6 +20,8 @@ Easily reorder posts, pages, custom post types, and taxonomies with intuitive dr
 * **Drag & Drop Interface** - Intuitive sorting directly in your admin post lists
 * **Universal Compatibility** - Works with any post type and taxonomy
 * **Lightweight & Fast** - No bloat, minimal impact on site performance
+* **Modern & Dependency-Free** - Vanilla JavaScript drag-and-drop (no jQuery UI) with touch and full keyboard support
+* **Reliable Saving** - Robust AJAX saving that works behind reverse proxies, custom ports, and HTTPS setups
 * **Developer Friendly** - Clean code with action hooks for customization
 
 = Key Features =
@@ -34,8 +36,11 @@ Easily reorder posts, pages, custom post types, and taxonomies with intuitive dr
 
 **Intuitive Admin Interface**
 
-* Drag-and-drop sorting directly in the WordPress post list table
-* Visual feedback while reordering items
+* Smooth drag-and-drop sorting directly in the WordPress post list table
+* Touch-friendly — press, hold, and drag to reorder on phones and tablets
+* Fully keyboard accessible — tab to a row, then use Space and the arrow keys to reorder, with screen-reader announcements
+* Clear save feedback — a "Saving… / Order saved" status appears as you sort
+* Optional drag handle — show a grip icon on hover, or keep rows draggable from anywhere
 * Changes saved automatically via AJAX - no page refresh needed
 * Works seamlessly with the default WordPress admin experience
 
@@ -93,6 +98,10 @@ Show your most compelling testimonials first to maximize their impact on potenti
 **Filter Hooks**
 
 * `scpo_post_types_args` - Modify which post types appear in settings
+* `scpo_use_sortablejs` - Force the drag engine in code (overrides the setting); return `true` for the modern SortableJS engine or `false` for the classic jQuery UI sorter
+
+**Drag & Drop Engine**
+Choose between the modern, dependency-free SortableJS engine (default) and the classic jQuery UI sorter under Settings > SCPOrder. The classic engine remains fully supported as a fallback.
 
 **Advanced View Mode**
 Enable the advanced view in settings to see all registered post types, including those normally hidden from the admin menu.
@@ -212,6 +221,22 @@ Yes, Simple Custom Post Order is compatible with WordPress multisite installatio
 
 Simply go to the post list for any enabled post type (Posts, Pages, Products, etc.), click and hold on a row, then drag it to the desired position. The new order is saved automatically.
 
+= Does drag-and-drop work on touch devices? =
+
+Yes. On phones and tablets, press and hold a row for a moment, then drag it to reorder. Normal taps and vertical scrolling continue to work as expected.
+
+= Can I reorder using only the keyboard? =
+
+Yes. Tab to a row's drag handle, press Space (or Enter) to pick it up, use the Up/Down arrow keys (or Home/End) to move it, then press Space to drop or Escape to cancel. Each step is announced for screen-reader users.
+
+= Can I switch back to the classic jQuery sorting? =
+
+Yes. Go to Settings > SCPOrder and set the "Drag & Drop Engine" to "Classic". Developers can also force it in code with the `scpo_use_sortablejs` filter (return `false` for the classic engine). The modern engine is the default and recommended for most sites.
+
+= My reordering wasn't saving on a previous version — is that fixed? =
+
+Yes. As of 2.7.0 the save request is always sent same-origin, which fixes silent save failures behind reverse proxies, load balancers, non-standard ports, and HTTP/HTTPS or domain mismatches. Expired security tokens now also refresh and retry automatically.
+
 = Can I programmatically override the custom order? =
 
 Yes, if you explicitly set `orderby` and `order` parameters in your custom queries, those will take precedence over the plugin's custom order.
@@ -224,6 +249,44 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 4. Reset order functionality for specific post types
 
 == Changelog ==
+
+= 2.7.0 - 2026-06-02 =
+
+**Modern Drag-and-Drop Engine (SortableJS)**
+
+* Reordering now uses a fast, dependency-free vanilla JavaScript engine (no jQuery UI)
+* Smoother drag animation and a cleaner floating row while sorting
+* Touch support — press, hold, and drag to reorder on phones and tablets
+* Full keyboard accessibility — tab to a row, press Space to grab, arrow keys (and Home/End) to move, Space to drop, Escape to cancel
+* Screen-reader announcements for every grab, move, and drop via an ARIA live region
+* Visible save feedback — a "Saving… / Order saved" status appears as you reorder
+
+**Reliability**
+
+* Fixed reordering silently failing to save in some environments — the AJAX request is now always same-origin (root-relative), so saving works correctly behind reverse proxies, load balancers, non-standard ports, and HTTP/HTTPS or domain mismatches
+* Expired security nonce now refreshes automatically and retries the save, so long-open edit screens (or sites with a shortened nonce lifetime) keep saving without a reload
+* Rapid successive drags are coalesced into a single request (the final order always wins), with an automatic retry on transient network errors
+
+**New Settings (Settings > SCPOrder)**
+
+* Drag & Drop Engine — choose "Modern" (SortableJS, default) or "Classic" (the legacy jQuery UI sorter)
+* Drag handle — optionally show a grip icon on row hover; hidden by default, and never affects accessibility (keyboard users can always reveal it)
+
+**Accessibility**
+
+* Respects the `prefers-reduced-motion` setting
+* Proper ARIA labels, roles, and focus handling on the drag handle
+
+**Performance & Build**
+
+* Ships minified admin assets; unminified sources load automatically when `SCRIPT_DEBUG` is enabled
+* Removed unused/dead JavaScript
+
+**Developer**
+
+* New filter `scpo_use_sortablejs` — force the drag engine on/off in code (overrides the setting)
+* The classic jQuery UI Sortable path remains available as an opt-out fallback
+* Fully backward compatible — existing settings, hooks (`scp_update_menu_order`, `scp_update_menu_order_tags`, `scpo_post_types_args`), the global `$scporder`, and the `scporder_options` structure are unchanged (two optional keys added: `engine`, `show_handle`)
 
 = 2.6.1 - 2026-06-01 =
 
@@ -401,6 +464,9 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 * Initial release
 
 == Upgrade Notice ==
+
+= 2.7.0 =
+New modern drag-and-drop: smoother sorting, touch support, full keyboard accessibility, and visible save feedback. Fixes saving in reverse-proxy / custom-port / HTTPS setups and auto-recovers expired security tokens. Fully backward compatible — the classic jQuery sorter remains available as a fallback.
 
 = 2.6.1 =
 Confirmed compatible with WordPress 7.0. Maintenance release with no functional changes.
