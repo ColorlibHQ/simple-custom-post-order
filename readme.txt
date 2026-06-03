@@ -4,7 +4,7 @@ Tags: post order, custom post order, sort posts, reorder posts, drag drop order
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 7.0
-Stable tag: 2.7.1
+Stable tag: 2.7.2
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -250,6 +250,12 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 
 == Changelog ==
 
+= 2.7.2 - 2026-06-03 =
+
+**Bug fixes**
+
+* Fixed previous/next post navigation links pointing to the wrong adjacent post (often reversed) for manually-ordered posts and custom post types. The adjacent-post queries now walk `menu_order` correctly and account for the date/ID tiebreaker WordPress adds to the query. Props @beatricelucaci (#146).
+
 = 2.7.1 - 2026-06-02 =
 
 **Bug fixes**
@@ -475,6 +481,9 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 * Initial release
 
 == Upgrade Notice ==
+
+= 2.7.2 =
+Fixes previous/next post navigation links pointing to the wrong adjacent post for manually-ordered posts and custom post types.
 
 = 2.7.1 =
 Bug-fix release: prevents post order from being scrambled on MariaDB / MySQL 8 during order normalization, and honors `orderby=include` term queries. Recommended for all users.

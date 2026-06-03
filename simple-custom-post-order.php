@@ -3,7 +3,7 @@
  * Plugin Name: Simple Custom Post Order
  * Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
  * Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
- * Version: 2.7.1
+ * Version: 2.7.2
  * Author: Colorlib
  * Author URI: https://colorlib.com/
  * Tested up to: 7.0
@@ -36,7 +36,7 @@
 
 define( 'SCPORDER_URL', plugins_url( '', __FILE__ ) );
 define( 'SCPORDER_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SCPORDER_VERSION', '2.7.1' );
+define( 'SCPORDER_VERSION', '2.7.2' );
 
 $scporder = new SCPO_Engine();
 
@@ -1026,6 +1026,18 @@ class SCPO_Engine {
 		echo '<p class="description">' . esc_html__( 'Enable this to see post types that are normally hidden from the admin menu. For advanced users only.', 'simple-custom-post-order' ) . '</p>';
 	}
 
+	/**
+	 * Rewrite the adjacent-post WHERE so previous/next walk menu_order.
+	 *
+	 * Modern WP builds a compound clause with a date/ID tiebreaker, e.g.
+	 *   (p.post_date < 'X' OR (p.post_date = 'X' AND p.ID < N))
+	 * We strip that tiebreaker, then swap the remaining date comparison for a
+	 * menu_order comparison. "Previous" = the item immediately before this one in
+	 * the manual order — i.e. the largest menu_order below the current post (#146).
+	 *
+	 * @param string $where
+	 * @return string
+	 */
 	public function scporder_previous_post_where( string $where ): string {
 		global $post;
 
@@ -1035,7 +1047,9 @@ class SCPO_Engine {
 		}
 
 		if ( isset( $post->post_type ) && in_array( $post->post_type, $objects, true ) ) {
-			$where = preg_replace( "/p.post_date < \'[0-9\-\s\:]+\'/i", "p.menu_order > '" . $post->menu_order . "'", $where );
+			$mo    = (int) $post->menu_order;
+			$where = preg_replace( "/\s+OR\s+\(\s*p\.post_date = '[^']*'\s+AND\s+p\.ID [<>] \d+\s*\)/i", '', $where );
+			$where = preg_replace( "/p\.post_date [<>] '[^']*'/i", "p.menu_order < '" . $mo . "'", $where );
 		}
 		return $where;
 	}
@@ -1049,11 +1063,18 @@ class SCPO_Engine {
 		}
 
 		if ( isset( $post->post_type ) && in_array( $post->post_type, $objects, true ) ) {
-			$orderby = 'ORDER BY p.menu_order ASC LIMIT 1';
+			$orderby = 'ORDER BY p.menu_order DESC LIMIT 1';
 		}
 		return $orderby;
 	}
 
+	/**
+	 * "Next" = the item immediately after this one in the manual order — i.e. the
+	 * smallest menu_order above the current post (#146).
+	 *
+	 * @param string $where
+	 * @return string
+	 */
 	public function scporder_next_post_where( string $where ): string {
 		global $post;
 
@@ -1063,7 +1084,9 @@ class SCPO_Engine {
 		}
 
 		if ( isset( $post->post_type ) && in_array( $post->post_type, $objects, true ) ) {
-			$where = preg_replace( "/p.post_date > \'[0-9\-\s\:]+\'/i", "p.menu_order < '" . $post->menu_order . "'", $where );
+			$mo    = (int) $post->menu_order;
+			$where = preg_replace( "/\s+OR\s+\(\s*p\.post_date = '[^']*'\s+AND\s+p\.ID [<>] \d+\s*\)/i", '', $where );
+			$where = preg_replace( "/p\.post_date [<>] '[^']*'/i", "p.menu_order > '" . $mo . "'", $where );
 		}
 		return $where;
 	}
@@ -1077,7 +1100,7 @@ class SCPO_Engine {
 		}
 
 		if ( isset( $post->post_type ) && in_array( $post->post_type, $objects, true ) ) {
-			$orderby = 'ORDER BY p.menu_order DESC LIMIT 1';
+			$orderby = 'ORDER BY p.menu_order ASC LIMIT 1';
 		}
 		return $orderby;
 	}

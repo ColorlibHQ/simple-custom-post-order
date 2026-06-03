@@ -5,6 +5,11 @@ WordPress.org-formatted history lives in [`readme.txt`](readme.txt); this file m
 recent releases in [Keep a Changelog](https://keepachangelog.com/) style and follows
 [Semantic Versioning](https://semver.org/).
 
+## [2.7.2] - 2026-06-03
+
+### Fixed
+- Previous/next post navigation (`get_previous_post()` / `get_next_post()` and the `*_post_link` template tags) returned the wrong adjacent post — often reversed — for manually-ordered posts and CPTs. The plugin rewrote only part of WordPress's adjacent-post `WHERE` clause (leaving the `post_date`/`ID` tiebreaker intact) and used the wrong direction. The clause is now fully rewritten to walk `menu_order`, with previous/next matching the manual order. Props [@beatricelucaci](https://github.com/beatricelucaci) (#146).
+
 ## [2.7.1] - 2026-06-02
 
 ### Fixed
