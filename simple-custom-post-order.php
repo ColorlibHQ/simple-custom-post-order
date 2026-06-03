@@ -3,7 +3,7 @@
  * Plugin Name: Simple Custom Post Order
  * Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
  * Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
- * Version: 2.7.2
+ * Version: 2.8.0
  * Author: Colorlib
  * Author URI: https://colorlib.com/
  * Tested up to: 7.0
@@ -36,7 +36,7 @@
 
 define( 'SCPORDER_URL', plugins_url( '', __FILE__ ) );
 define( 'SCPORDER_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SCPORDER_VERSION', '2.7.2' );
+define( 'SCPORDER_VERSION', '2.8.0' );
 
 $scporder = new SCPO_Engine();
 
@@ -81,6 +81,11 @@ class SCPO_Engine {
 		add_filter( 'scpo_post_types_args', array( $this, 'scpo_filter_post_types' ), 10, 2 );
 
 		add_action( 'wp_ajax_scpo_reset_order', array( $this, 'scpo_ajax_reset_order' ) );
+
+		// 2.8.0: new-item placement (#45) + optional numeric Order column (#76/#89).
+		add_action( 'save_post', array( $this, 'scporder_place_new_post' ), 10, 2 );
+		add_action( 'admin_init', array( $this, 'setup_order_column' ) );
+		add_action( 'wp_ajax_scpo_set_position', array( $this, 'scpo_ajax_set_position' ) );
 
 		add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), array( $this, 'add_settings_link' ) );
 	}
@@ -452,7 +457,7 @@ class SCPO_Engine {
 
 		check_ajax_referer( 'scporder_nonce_action', 'nonce' );
 
-		if ( ! current_user_can( 'edit_posts' ) ) {
+		if ( ! $this->scporder_user_can_reorder() ) {
 			wp_send_json_error( [ 'message' => __( 'Permission denied.', 'simple-custom-post-order' ) ], 403 );
 		}
 
@@ -528,7 +533,7 @@ class SCPO_Engine {
 
 		check_ajax_referer( 'scporder_nonce_action', 'nonce' );
 
-		if ( ! current_user_can( 'edit_posts' ) ) {
+		if ( ! $this->scporder_user_can_reorder() ) {
 			wp_send_json_error( [ 'message' => __( 'Permission denied.', 'simple-custom-post-order' ) ], 403 );
 		}
 
@@ -613,7 +618,7 @@ class SCPO_Engine {
 	 * @return void
 	 */
 	public function refresh_nonce(): void {
-		if ( ! current_user_can( 'edit_posts' ) ) {
+		if ( ! $this->scporder_user_can_reorder() ) {
 			wp_send_json_error( [ 'message' => __( 'Permission denied.', 'simple-custom-post-order' ) ], 403 );
 		}
 
@@ -639,6 +644,9 @@ class SCPO_Engine {
 					'show_advanced_view' => '',
 					'engine'             => 'sortable',
 					'show_handle'        => '1',
+					'new_post_position'  => 'bottom',
+					'allowed_roles'      => [],
+					'order_column'       => '',
 				],
 			]
 		);
@@ -714,6 +722,30 @@ class SCPO_Engine {
 			'scporder-settings',
 			'scporder_advanced_section'
 		);
+
+		add_settings_field(
+			'scporder_new_post_position',
+			__( 'New items', 'simple-custom-post-order' ),
+			[ $this, 'render_new_post_position_field' ],
+			'scporder-settings',
+			'scporder_advanced_section'
+		);
+
+		add_settings_field(
+			'scporder_order_column',
+			__( 'Order column', 'simple-custom-post-order' ),
+			[ $this, 'render_order_column_field' ],
+			'scporder-settings',
+			'scporder_advanced_section'
+		);
+
+		add_settings_field(
+			'scporder_allowed_roles',
+			__( 'Who can reorder', 'simple-custom-post-order' ),
+			[ $this, 'render_allowed_roles_field' ],
+			'scporder-settings',
+			'scporder_advanced_section'
+		);
 	}
 
 	/**
@@ -731,6 +763,9 @@ class SCPO_Engine {
 			'show_advanced_view' => '',
 			'engine'             => 'sortable',
 			'show_handle'        => '1',
+			'new_post_position'  => 'bottom',
+			'allowed_roles'      => [],
+			'order_column'       => '',
 		];
 
 		// Sanitize post types (objects)
@@ -754,6 +789,19 @@ class SCPO_Engine {
 		// Show-drag-handle toggle. Unchecked checkboxes are absent from $input,
 		// so missing means "hide" ('0'); checked submits '1'.
 		$sanitized['show_handle'] = ! empty( $input['show_handle'] ) ? '1' : '0';
+
+		// Where newly created items are placed in the order.
+		$sanitized['new_post_position'] = ( isset( $input['new_post_position'] ) && 'top' === $input['new_post_position'] ) ? 'top' : 'bottom';
+
+		// Optional numeric "Order" column (off by default).
+		$sanitized['order_column'] = ! empty( $input['order_column'] ) ? '1' : '0';
+
+		// Roles allowed to reorder. Empty array = fall back to the capability check.
+		$sanitized['allowed_roles'] = [];
+		if ( isset( $input['allowed_roles'] ) && is_array( $input['allowed_roles'] ) && function_exists( 'wp_roles' ) ) {
+			$valid_roles                = array_keys( wp_roles()->get_names() );
+			$sanitized['allowed_roles'] = array_values( array_intersect( $valid_roles, array_map( 'sanitize_key', $input['allowed_roles'] ) ) );
+		}
 
 		// Initialize menu_order for newly enabled post types
 		if ( ! empty( $sanitized['objects'] ) ) {
@@ -1024,6 +1072,261 @@ class SCPO_Engine {
 			esc_html__( 'Show all registered post types (including hidden ones)', 'simple-custom-post-order' )
 		);
 		echo '<p class="description">' . esc_html__( 'Enable this to see post types that are normally hidden from the admin menu. For advanced users only.', 'simple-custom-post-order' ) . '</p>';
+	}
+
+	/**
+	 * Render the "new items placement" choice (#45).
+	 *
+	 * @return void
+	 */
+	public function render_new_post_position_field(): void {
+		$pos = $this->get_new_post_position();
+		echo '<fieldset>';
+		echo '<legend class="screen-reader-text"><span>' . esc_html__( 'New items', 'simple-custom-post-order' ) . '</span></legend>';
+		printf(
+			'<label><input type="radio" name="scporder_options[new_post_position]" value="bottom" %s /> %s</label><br />',
+			checked( 'bottom', $pos, false ),
+			esc_html__( 'Add to the bottom of the order (default)', 'simple-custom-post-order' )
+		);
+		printf(
+			'<label><input type="radio" name="scporder_options[new_post_position]" value="top" %s /> %s</label>',
+			checked( 'top', $pos, false ),
+			esc_html__( 'Add to the top of the order', 'simple-custom-post-order' )
+		);
+		echo '<p class="description">' . esc_html__( 'Where a newly created item lands in the manual order of an enabled post type.', 'simple-custom-post-order' ) . '</p>';
+		echo '</fieldset>';
+	}
+
+	/**
+	 * Render the optional "Order" column toggle (#76 / #89).
+	 *
+	 * @return void
+	 */
+	public function render_order_column_field(): void {
+		$on = $this->is_order_column_enabled();
+		printf(
+			'<label><input type="checkbox" name="scporder_options[order_column]" value="1" %s /> %s</label>',
+			checked( $on, true, false ),
+			esc_html__( 'Show an editable “Order” number column on enabled post-type lists', 'simple-custom-post-order' )
+		);
+		echo '<p class="description">' . esc_html__( 'Adds a column where you can type an exact position — handy for jumping an item across paginated lists. Hide it any time via Screen Options. Off by default.', 'simple-custom-post-order' ) . '</p>';
+	}
+
+	/**
+	 * Render the "who can reorder" role checkboxes (#95).
+	 *
+	 * @return void
+	 */
+	public function render_allowed_roles_field(): void {
+		$selected = $this->get_allowed_roles();
+		$roles    = function_exists( 'get_editable_roles' ) ? get_editable_roles() : [];
+		echo '<fieldset>';
+		echo '<legend class="screen-reader-text"><span>' . esc_html__( 'Who can reorder', 'simple-custom-post-order' ) . '</span></legend>';
+		foreach ( $roles as $key => $role ) {
+			printf(
+				'<label><input type="checkbox" name="scporder_options[allowed_roles][]" value="%s" %s /> %s</label><br />',
+				esc_attr( $key ),
+				checked( in_array( $key, $selected, true ), true, false ),
+				esc_html( translate_user_role( $role['name'] ) )
+			);
+		}
+		echo '<p class="description">' . esc_html__( 'Restrict drag-and-drop reordering to these roles. Leave all unchecked to allow anyone who can edit posts (default). Developers can override with the scpo_capability filter.', 'simple-custom-post-order' ) . '</p>';
+		echo '</fieldset>';
+	}
+
+	/* ---- 2.8.0 option helpers ---------------------------------------- */
+
+	public function get_new_post_position(): string {
+		$o = get_option( 'scporder_options', [] );
+		return ( isset( $o['new_post_position'] ) && 'top' === $o['new_post_position'] ) ? 'top' : 'bottom';
+	}
+
+	public function is_order_column_enabled(): bool {
+		$o = get_option( 'scporder_options', [] );
+		return isset( $o['order_column'] ) && '1' === $o['order_column'];
+	}
+
+	public function get_allowed_roles(): array {
+		$o = get_option( 'scporder_options', [] );
+		return ( isset( $o['allowed_roles'] ) && is_array( $o['allowed_roles'] ) ) ? $o['allowed_roles'] : [];
+	}
+
+	public function get_reorder_capability(): string {
+		return (string) apply_filters( 'scpo_capability', 'edit_posts' );
+	}
+
+	/**
+	 * Whether the current user may reorder: must hold the (filterable) capability
+	 * and, if specific roles are configured, hold one of them (#95).
+	 *
+	 * @return bool
+	 */
+	public function scporder_user_can_reorder(): bool {
+		if ( ! current_user_can( $this->get_reorder_capability() ) ) {
+			return false;
+		}
+		$roles = $this->get_allowed_roles();
+		if ( empty( $roles ) ) {
+			return true;
+		}
+		$user = wp_get_current_user();
+		return (bool) array_intersect( $roles, (array) $user->roles );
+	}
+
+	/* ---- #45: placement of newly created items ----------------------- */
+
+	/**
+	 * Place a newly created item at the top or bottom of its post type's order.
+	 * Runs only once — while the item still has the default menu_order of 0.
+	 *
+	 * @param int     $post_id
+	 * @param WP_Post $post
+	 * @return void
+	 */
+	public function scporder_place_new_post( $post_id, $post ): void {
+		if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
+			return;
+		}
+		if ( in_array( $post->post_status, [ 'auto-draft', 'trash', 'inherit' ], true ) ) {
+			return;
+		}
+		if ( ! in_array( $post->post_type, $this->get_scporder_options_objects(), true ) ) {
+			return;
+		}
+		if ( 0 !== (int) $post->menu_order ) {
+			return; // already placed / ordered
+		}
+
+		global $wpdb;
+		if ( 'top' === $this->get_new_post_position() ) {
+			$wpdb->query(
+				$wpdb->prepare(
+					"UPDATE $wpdb->posts SET menu_order = menu_order + 1
+					WHERE post_type = %s AND ID <> %d AND post_status IN ('publish','pending','draft','private','future')",
+					$post->post_type,
+					$post_id
+				)
+			);
+			$wpdb->update( $wpdb->posts, [ 'menu_order' => 1 ], [ 'ID' => $post_id ] );
+		} else {
+			$max = (int) $wpdb->get_var(
+				$wpdb->prepare(
+					"SELECT MAX(menu_order) FROM $wpdb->posts
+					WHERE post_type = %s AND ID <> %d AND post_status IN ('publish','pending','draft','private','future')",
+					$post->post_type,
+					$post_id
+				)
+			);
+			$wpdb->update( $wpdb->posts, [ 'menu_order' => $max + 1 ], [ 'ID' => $post_id ] );
+		}
+		clean_post_cache( $post_id );
+	}
+
+	/* ---- #76 / #89: optional numeric "Order" column ------------------ */
+
+	/**
+	 * Register the Order column + assets on enabled list screens, gated by the
+	 * setting and the reorder capability.
+	 *
+	 * @return void
+	 */
+	public function setup_order_column(): void {
+		if ( ! $this->is_order_column_enabled() || ! $this->scporder_user_can_reorder() ) {
+			return;
+		}
+		foreach ( $this->get_scporder_options_objects() as $type ) {
+			$type = sanitize_key( $type );
+			add_filter( "manage_edit-{$type}_columns", [ $this, 'add_order_column' ] );
+			add_action( "manage_{$type}_posts_custom_column", [ $this, 'render_order_column' ], 10, 2 );
+		}
+		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_order_column_assets' ] );
+	}
+
+	public function add_order_column( array $columns ): array {
+		$columns['scpo_order'] = __( 'Order', 'simple-custom-post-order' );
+		return $columns;
+	}
+
+	public function render_order_column( string $column, int $post_id ): void {
+		if ( 'scpo_order' !== $column ) {
+			return;
+		}
+		printf(
+			'<input type="number" class="scpo-order-input small-text" value="%d" min="1" step="1" data-id="%d" aria-label="%s" />',
+			(int) get_post_field( 'menu_order', $post_id ),
+			$post_id,
+			esc_attr__( 'Set position', 'simple-custom-post-order' )
+		);
+	}
+
+	public function enqueue_order_column_assets( $hook ): void {
+		if ( 'edit.php' !== $hook ) {
+			return;
+		}
+		$type = isset( $_GET['post_type'] ) ? sanitize_key( wp_unslash( $_GET['post_type'] ) ) : 'post';
+		if ( ! in_array( $type, $this->get_scporder_options_objects(), true ) ) {
+			return;
+		}
+		$suffix = ( defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG ) ? '' : '.min';
+		wp_enqueue_script( 'scpo-order-column', SCPORDER_URL . "/assets/scporder-order-column{$suffix}.js", [], SCPORDER_VERSION, true );
+		wp_localize_script( 'scpo-order-column', 'scpoOrderCol', [
+			'ajax_url' => $this->get_ajax_url(),
+			'nonce'    => wp_create_nonce( 'scporder_nonce_action' ),
+			'error'    => __( 'Couldn’t update the order — please try again.', 'simple-custom-post-order' ),
+		] );
+		add_action( 'admin_print_styles', [ $this, 'print_order_column_style' ] );
+	}
+
+	public function print_order_column_style(): void {
+		echo '<style>.column-scpo_order{width:70px}.scpo-order-input{width:58px}.scpo-order-input.is-saving{opacity:.5;pointer-events:none}</style>';
+	}
+
+	/**
+	 * Move a post to an absolute position in its post type's order. Independent
+	 * of list pagination — the position is absolute across the whole type.
+	 *
+	 * @return void
+	 */
+	public function scpo_ajax_set_position(): void {
+		check_ajax_referer( 'scporder_nonce_action', 'nonce' );
+
+		if ( ! $this->scporder_user_can_reorder() ) {
+			wp_send_json_error( [ 'message' => __( 'Permission denied.', 'simple-custom-post-order' ) ], 403 );
+		}
+
+		$post_id  = isset( $_POST['id'] ) ? absint( $_POST['id'] ) : 0;
+		$position = isset( $_POST['position'] ) ? absint( $_POST['position'] ) : 0;
+		$post     = $post_id ? get_post( $post_id ) : null;
+
+		if ( ! $post || ! in_array( $post->post_type, $this->get_scporder_options_objects(), true ) ) {
+			wp_send_json_error( [ 'message' => __( 'Invalid item.', 'simple-custom-post-order' ) ] );
+		}
+
+		global $wpdb;
+		$ids = array_map(
+			'intval',
+			$wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT ID FROM $wpdb->posts
+					WHERE post_type = %s AND post_status IN ('publish','pending','draft','private','future')
+					ORDER BY menu_order ASC, post_date DESC",
+					$post->post_type
+				)
+			)
+		);
+
+		// Pull the post out, then splice it in at the requested 1-based position.
+		$ids    = array_values( array_diff( $ids, [ $post_id ] ) );
+		$target = max( 1, min( $position, count( $ids ) + 1 ) ) - 1;
+		array_splice( $ids, $target, 0, [ $post_id ] );
+
+		foreach ( $ids as $i => $id ) {
+			$wpdb->update( $wpdb->posts, [ 'menu_order' => $i + 1 ], [ 'ID' => (int) $id ] );
+			clean_post_cache( (int) $id );
+		}
+
+		do_action( 'scp_update_menu_order' );
+		wp_send_json_success( [ 'message' => __( 'Order updated.', 'simple-custom-post-order' ) ] );
 	}
 
 	/**
