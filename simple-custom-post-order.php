@@ -280,6 +280,12 @@ class SCPO_Engine {
 			return;
 		}
 
+		// Don't load the sorter for users who aren't allowed to reorder — avoids a
+		// drag that would just fail on save (#95).
+		if ( ! $this->scporder_user_can_reorder() ) {
+			return;
+		}
+
 		/**
 		 * Which drag-and-drop engine to load. The user's choice in
 		 * Settings → SCPOrder ("Drag & Drop Engine") provides the default; the
@@ -1236,6 +1242,11 @@ class SCPO_Engine {
 		}
 		foreach ( $this->get_scporder_options_objects() as $type ) {
 			$type = sanitize_key( $type );
+			// The numeric column does a flat renumber, which would fight the page
+			// tree on hierarchical types. Proper hierarchical ordering is #58 (2.9.0).
+			if ( is_post_type_hierarchical( $type ) ) {
+				continue;
+			}
 			add_filter( "manage_edit-{$type}_columns", [ $this, 'add_order_column' ] );
 			add_action( "manage_{$type}_posts_custom_column", [ $this, 'render_order_column' ], 10, 2 );
 		}
@@ -1298,7 +1309,7 @@ class SCPO_Engine {
 		$position = isset( $_POST['position'] ) ? absint( $_POST['position'] ) : 0;
 		$post     = $post_id ? get_post( $post_id ) : null;
 
-		if ( ! $post || ! in_array( $post->post_type, $this->get_scporder_options_objects(), true ) ) {
+		if ( ! $post || ! in_array( $post->post_type, $this->get_scporder_options_objects(), true ) || is_post_type_hierarchical( $post->post_type ) ) {
 			wp_send_json_error( [ 'message' => __( 'Invalid item.', 'simple-custom-post-order' ) ] );
 		}
 

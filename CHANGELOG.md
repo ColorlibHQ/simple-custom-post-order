@@ -9,7 +9,7 @@ recent releases in [Keep a Changelog](https://keepachangelog.com/) style and fol
 
 ### Added
 - **New-item placement** — choose whether newly created posts/pages/items are added to the **bottom** (default) or **top** of the manual order (Settings → SCPOrder → Advanced). Props [@mplusb](https://github.com/mplusb) (#45).
-- **Optional "Order" column** — an editable position number column on enabled post-type lists. Type an exact position to move an item — including **jumping it across paginated pages** — backed by a new `scpo_set_position` AJAX endpoint. Off by default; toggle via Settings and hide/show via Screen Options. Props [@mplusb](https://github.com/mplusb) (#76, #89, #136).
+- **Optional "Order" column** — an editable position number column on enabled **non-hierarchical** post-type lists. Type an exact position to move an item — including **jumping it across paginated pages** — backed by a new `scpo_set_position` AJAX endpoint. Off by default; toggle via Settings and hide/show via Screen Options. (Hierarchical types like Pages get dedicated tree ordering in a later release — #58.) Props [@mplusb](https://github.com/mplusb) (#76, #89, #136).
 - **Role-based reordering** — restrict drag-and-drop to selected roles in Settings, plus a new **`scpo_capability`** filter for developers (default `edit_posts`). Props [@mplusb](https://github.com/mplusb) (#95, #133).
 
 ## [2.7.2] - 2026-06-03

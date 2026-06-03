@@ -256,7 +256,7 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 **New features**
 
 * **Choose where new items are placed** — a setting to add newly created posts/pages/items to the bottom (default) or top of the manual order. Props @mplusb (#45).
-* **Optional “Order” number column** — turn on an editable position column on enabled post-type lists to type an item's exact order, including jumping it across paginated pages. Hidden by default and toggleable via Screen Options. Props @mplusb (#76, #89, #136).
+* **Optional “Order” number column** — turn on an editable position column on enabled (non-hierarchical) post-type lists to type an item's exact order, including jumping it across paginated pages. Hidden by default and toggleable via Screen Options. (Hierarchical types like Pages are handled separately in a future release.) Props @mplusb (#76, #89, #136).
 * **Role-based reordering** — restrict drag-and-drop reordering to specific roles in Settings > SCPOrder, with a new `scpo_capability` filter for developers. Props @mplusb (#95, #133).
 
 = 2.7.2 - 2026-06-03 =
