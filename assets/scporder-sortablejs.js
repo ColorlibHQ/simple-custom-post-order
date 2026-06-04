@@ -52,6 +52,10 @@
 		animation: 150,
 		draggable: 'tr',                        // whole row is draggable for mouse / touch
 		filter: '.no-items, .inline-edit-row',  // never drag the "no items" or quick-edit rows
+		preventOnFilter: false,                 // ...but don't preventDefault() on those rows —
+		                                        // SortableJS defaults this to true, which would
+		                                        // swallow left-click focus on the <input>/<select>
+		                                        // fields inside WP Quick Edit / Bulk Edit rows.
 		ghostClass: 'scpo-ghost',
 		chosenClass: 'scpo-chosen',
 		fallbackClass: 'scpo-fallback',
