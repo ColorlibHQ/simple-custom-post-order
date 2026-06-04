@@ -4,7 +4,7 @@ Tags: post order, custom post order, sort posts, reorder posts, drag drop order
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 7.0
-Stable tag: 2.7.2
+Stable tag: 2.7.3
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -250,6 +250,12 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 
 == Changelog ==
 
+= 2.7.3 - 2026-06-04 =
+
+**Bug fixes**
+
+* Fixed Quick Edit and Bulk Edit fields (text inputs, dropdowns) not responding to a left mouse click on post/page list screens when the Modern (SortableJS) sorting engine was active. The drag engine was excluding those inline-edit rows from sorting but still suppressing the browser's default click behaviour on them; native field interaction is now preserved. Right-click was unaffected, and the Classic engine was never affected. Reported by @stilografico and @tedmw.
+
 = 2.7.2 - 2026-06-03 =
 
 **Bug fixes**
@@ -481,6 +487,9 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 * Initial release
 
 == Upgrade Notice ==
+
+= 2.7.3 =
+Fixes Quick Edit / Bulk Edit fields being unclickable on post list screens when the Modern sorting engine is active. Recommended for all users on the Modern engine.
 
 = 2.7.2 =
 Fixes previous/next post navigation links pointing to the wrong adjacent post for manually-ordered posts and custom post types.
