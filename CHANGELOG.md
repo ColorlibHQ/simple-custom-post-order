@@ -12,6 +12,11 @@ recent releases in [Keep a Changelog](https://keepachangelog.com/) style and fol
 - **Optional "Order" column** — an editable position number column on enabled **non-hierarchical** post-type lists. Type an exact position to move an item — including **jumping it across paginated pages** — backed by a new `scpo_set_position` AJAX endpoint. Off by default; toggle via Settings and hide/show via Screen Options. (Hierarchical types like Pages get dedicated tree ordering in a later release — #58.) Props [@mplusb](https://github.com/mplusb) (#76, #89, #136).
 - **Role-based reordering** — restrict drag-and-drop to selected roles in Settings, plus a new **`scpo_capability`** filter for developers (default `edit_posts`). Props [@mplusb](https://github.com/mplusb) (#95, #133).
 
+## [2.7.3] - 2026-06-04
+
+### Fixed
+- Quick Edit / Bulk Edit fields (`<input>`, `<select>`) were not clickable with the left mouse button on post/page list screens when the **Modern (SortableJS)** engine was active. SortableJS excluded the inline-edit rows from dragging via `filter`, but its default `preventOnFilter: true` still called `preventDefault()` on the mousedown, cancelling native focus and dropdown-open (right-click was unaffected because SortableJS bails on non-left buttons first). Set `preventOnFilter: false` so filtered rows stay undraggable while their fields remain fully interactive. The Classic (jQuery UI) engine was never affected. Reported by @stilografico and @tedmw.
+
 ## [2.7.2] - 2026-06-03
 
 ### Fixed

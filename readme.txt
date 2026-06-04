@@ -259,6 +259,12 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 * **Optional “Order” number column** — turn on an editable position column on enabled (non-hierarchical) post-type lists to type an item's exact order, including jumping it across paginated pages. Hidden by default and toggleable via Screen Options. (Hierarchical types like Pages are handled separately in a future release.) Props @mplusb (#76, #89, #136).
 * **Role-based reordering** — restrict drag-and-drop reordering to specific roles in Settings > SCPOrder, with a new `scpo_capability` filter for developers. Props @mplusb (#95, #133).
 
+= 2.7.3 - 2026-06-04 =
+
+**Bug fixes**
+
+* Fixed Quick Edit and Bulk Edit fields (text inputs, dropdowns) not responding to a left mouse click on post/page list screens when the Modern (SortableJS) sorting engine was active. The drag engine was excluding those inline-edit rows from sorting but still suppressing the browser's default click behaviour on them; native field interaction is now preserved. Right-click was unaffected, and the Classic engine was never affected. Reported by @stilografico and @tedmw.
+
 = 2.7.2 - 2026-06-03 =
 
 **Bug fixes**
@@ -493,6 +499,9 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 
 = 2.8.0 =
 New: choose where new items are placed, an optional editable "Order" number column (great for paginated lists), and role-based reordering control.
+
+= 2.7.3 =
+Fixes Quick Edit / Bulk Edit fields being unclickable on post list screens when the Modern sorting engine is active. Recommended for all users on the Modern engine.
 
 = 2.7.2 =
 Fixes previous/next post navigation links pointing to the wrong adjacent post for manually-ordered posts and custom post types.
