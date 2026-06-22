@@ -3,7 +3,7 @@
  * Plugin Name: Simple Custom Post Order
  * Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
  * Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
- * Version: 2.8.0
+ * Version: 2.8.1
  * Author: Colorlib
  * Author URI: https://colorlib.com/
  * Tested up to: 7.0
@@ -36,7 +36,7 @@
 
 define( 'SCPORDER_URL', plugins_url( '', __FILE__ ) );
 define( 'SCPORDER_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SCPORDER_VERSION', '2.8.0' );
+define( 'SCPORDER_VERSION', '2.8.1' );
 
 $scporder = new SCPO_Engine();
 
@@ -1341,6 +1341,24 @@ class SCPO_Engine {
 	}
 
 	/**
+	 * Whether previous/next adjacent-post links should be reversed relative to
+	 * the manual order.
+	 *
+	 * "Previous/next" under manual ordering is inherently ambiguous. The default
+	 * (false, the #146 behaviour since 2.7.2) treats "previous" as the item
+	 * *before* the current one in the arranged order and "next" as the item
+	 * *after* — the natural reading for sequential content (chapters, lessons,
+	 * steps). Sites/themes built around WordPress's native chronological
+	 * convention expect the opposite (the pre-2.7.2 direction); flip them back
+	 * with this filter without touching the theme's template tags. (#146)
+	 *
+	 * @return bool
+	 */
+	private function scporder_adjacent_reversed(): bool {
+		return (bool) apply_filters( 'scpo_reverse_adjacent_posts', false );
+	}
+
+	/**
 	 * Rewrite the adjacent-post WHERE so previous/next walk menu_order.
 	 *
 	 * Modern WP builds a compound clause with a date/ID tiebreaker, e.g.
@@ -1361,9 +1379,10 @@ class SCPO_Engine {
 		}
 
 		if ( isset( $post->post_type ) && in_array( $post->post_type, $objects, true ) ) {
-			$mo    = (int) $post->menu_order;
-			$where = preg_replace( "/\s+OR\s+\(\s*p\.post_date = '[^']*'\s+AND\s+p\.ID [<>] \d+\s*\)/i", '', $where );
-			$where = preg_replace( "/p\.post_date [<>] '[^']*'/i", "p.menu_order < '" . $mo . "'", $where );
+			$mo       = (int) $post->menu_order;
+			$operator = $this->scporder_adjacent_reversed() ? '>' : '<';
+			$where    = preg_replace( "/\s+OR\s+\(\s*p\.post_date = '[^']*'\s+AND\s+p\.ID [<>] \d+\s*\)/i", '', $where );
+			$where    = preg_replace( "/p\.post_date [<>] '[^']*'/i", "p.menu_order " . $operator . " '" . $mo . "'", $where );
 		}
 		return $where;
 	}
@@ -1377,7 +1396,8 @@ class SCPO_Engine {
 		}
 
 		if ( isset( $post->post_type ) && in_array( $post->post_type, $objects, true ) ) {
-			$orderby = 'ORDER BY p.menu_order DESC LIMIT 1';
+			$direction = $this->scporder_adjacent_reversed() ? 'ASC' : 'DESC';
+			$orderby   = 'ORDER BY p.menu_order ' . $direction . ' LIMIT 1';
 		}
 		return $orderby;
 	}
@@ -1398,9 +1418,10 @@ class SCPO_Engine {
 		}
 
 		if ( isset( $post->post_type ) && in_array( $post->post_type, $objects, true ) ) {
-			$mo    = (int) $post->menu_order;
-			$where = preg_replace( "/\s+OR\s+\(\s*p\.post_date = '[^']*'\s+AND\s+p\.ID [<>] \d+\s*\)/i", '', $where );
-			$where = preg_replace( "/p\.post_date [<>] '[^']*'/i", "p.menu_order > '" . $mo . "'", $where );
+			$mo       = (int) $post->menu_order;
+			$operator = $this->scporder_adjacent_reversed() ? '<' : '>';
+			$where    = preg_replace( "/\s+OR\s+\(\s*p\.post_date = '[^']*'\s+AND\s+p\.ID [<>] \d+\s*\)/i", '', $where );
+			$where    = preg_replace( "/p\.post_date [<>] '[^']*'/i", "p.menu_order " . $operator . " '" . $mo . "'", $where );
 		}
 		return $where;
 	}
@@ -1414,7 +1435,8 @@ class SCPO_Engine {
 		}
 
 		if ( isset( $post->post_type ) && in_array( $post->post_type, $objects, true ) ) {
-			$orderby = 'ORDER BY p.menu_order ASC LIMIT 1';
+			$direction = $this->scporder_adjacent_reversed() ? 'DESC' : 'ASC';
+			$orderby   = 'ORDER BY p.menu_order ' . $direction . ' LIMIT 1';
 		}
 		return $orderby;
 	}

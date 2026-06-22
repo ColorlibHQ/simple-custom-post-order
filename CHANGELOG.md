@@ -5,6 +5,11 @@ WordPress.org-formatted history lives in [`readme.txt`](readme.txt); this file m
 recent releases in [Keep a Changelog](https://keepachangelog.com/) style and follows
 [Semantic Versioning](https://semver.org/).
 
+## [2.8.1] - 2026-06-22
+
+### Added
+- **Reversible previous/next links** — new **`scpo_reverse_adjacent_posts`** filter to flip the direction of the previous/next post-navigation links for manually-ordered posts and custom post types. The 2.7.2 fix (#146) made "previous" the item *before* the current one in the arranged order and "next" the item *after* — correct for sequential content, but the opposite of what sites built around WordPress's native chronological convention expect. Return `true` from the filter to restore the pre-2.7.2 direction without editing your theme's template tags. Reported by @sarahmelyne.
+
 ## [2.8.0] - 2026-06-17
 
 ### Added

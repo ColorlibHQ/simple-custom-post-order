@@ -4,7 +4,7 @@ Tags: post order, custom post order, sort posts, reorder posts, drag drop order
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 7.0
-Stable tag: 2.8.0
+Stable tag: 2.8.1
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -250,6 +250,12 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 4. Reset order functionality for specific post types
 
 == Changelog ==
+
+= 2.8.1 - 2026-06-22 =
+
+**Improvements**
+
+* Added a `scpo_reverse_adjacent_posts` filter to reverse the direction of the previous/next post navigation links for manually-ordered posts and custom post types. The 2.7.2 fix (#146) made "previous" the item before the current one in the arranged order and "next" the item after — correct for sequential content, but the opposite of what sites built around WordPress's native chronological convention expect. Return `true` from the filter to restore the pre-2.7.2 direction without editing your theme's template tags. Reported by @sarahmelyne.
 
 = 2.8.0 - 2026-06-17 =
 
