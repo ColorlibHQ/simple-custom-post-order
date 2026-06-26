@@ -5,6 +5,11 @@ WordPress.org-formatted history lives in [`readme.txt`](readme.txt); this file m
 recent releases in [Keep a Changelog](https://keepachangelog.com/) style and follows
 [Semantic Versioning](https://semver.org/).
 
+## [2.8.2] - 2026-06-26
+
+### Fixed
+- Newly created posts/items no longer default to the **bottom** of the manual order. The 2.8.0 new-item-placement feature shipped with a `bottom` default, which silently reversed long-standing behavior — pre-2.8.0, a new post's `menu_order = 0` sorted first and `refresh()` renumbered it to `1`, so new items landed at the **top**. On every site upgrading from before 2.8.0 the option key is absent, and the getter resolved absent → `bottom`, surfacing as "the latest post is stuck at the bottom of the admin list." The default is back to **top**; an explicit `bottom` choice saved in Settings is still honored. Reported by @ffusion and @deisedesign.
+
 ## [2.8.1] - 2026-06-22
 
 ### Added

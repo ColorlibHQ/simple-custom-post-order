@@ -4,7 +4,7 @@ Tags: post order, custom post order, sort posts, reorder posts, drag drop order
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 7.0
-Stable tag: 2.8.1
+Stable tag: 2.8.2
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -250,6 +250,12 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 4. Reset order functionality for specific post types
 
 == Changelog ==
+
+= 2.8.2 - 2026-06-26 =
+
+**Bug fixes**
+
+* Fixed newly created posts and items landing at the **bottom** of the manual order on sites upgraded from before 2.8.0 — which made the latest post appear at the bottom of admin lists instead of the top. The 2.8.0 "new-item placement" feature shipped defaulting to *bottom*, which silently reversed the long-standing behavior (new items went to the **top**). The default is now *top* again. If you prefer new items at the bottom, choose it under Settings → Sortable Post Types → "New items". Sites that already selected *bottom* keep their choice. Reported by @ffusion and @deisedesign.
 
 = 2.8.1 - 2026-06-22 =
 

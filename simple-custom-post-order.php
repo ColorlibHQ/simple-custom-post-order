@@ -3,7 +3,7 @@
  * Plugin Name: Simple Custom Post Order
  * Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
  * Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
- * Version: 2.8.1
+ * Version: 2.8.2
  * Author: Colorlib
  * Author URI: https://colorlib.com/
  * Tested up to: 7.0
@@ -36,7 +36,7 @@
 
 define( 'SCPORDER_URL', plugins_url( '', __FILE__ ) );
 define( 'SCPORDER_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SCPORDER_VERSION', '2.8.1' );
+define( 'SCPORDER_VERSION', '2.8.2' );
 
 $scporder = new SCPO_Engine();
 
@@ -650,7 +650,7 @@ class SCPO_Engine {
 					'show_advanced_view' => '',
 					'engine'             => 'sortable',
 					'show_handle'        => '1',
-					'new_post_position'  => 'bottom',
+					'new_post_position'  => 'top',
 					'allowed_roles'      => [],
 					'order_column'       => '',
 				],
@@ -769,7 +769,7 @@ class SCPO_Engine {
 			'show_advanced_view' => '',
 			'engine'             => 'sortable',
 			'show_handle'        => '1',
-			'new_post_position'  => 'bottom',
+			'new_post_position'  => 'top',
 			'allowed_roles'      => [],
 			'order_column'       => '',
 		];
@@ -797,7 +797,7 @@ class SCPO_Engine {
 		$sanitized['show_handle'] = ! empty( $input['show_handle'] ) ? '1' : '0';
 
 		// Where newly created items are placed in the order.
-		$sanitized['new_post_position'] = ( isset( $input['new_post_position'] ) && 'top' === $input['new_post_position'] ) ? 'top' : 'bottom';
+		$sanitized['new_post_position'] = ( isset( $input['new_post_position'] ) && 'bottom' === $input['new_post_position'] ) ? 'bottom' : 'top';
 
 		// Optional numeric "Order" column (off by default).
 		$sanitized['order_column'] = ! empty( $input['order_column'] ) ? '1' : '0';
@@ -1092,12 +1092,12 @@ class SCPO_Engine {
 		printf(
 			'<label><input type="radio" name="scporder_options[new_post_position]" value="bottom" %s /> %s</label><br />',
 			checked( 'bottom', $pos, false ),
-			esc_html__( 'Add to the bottom of the order (default)', 'simple-custom-post-order' )
+			esc_html__( 'Add to the bottom of the order', 'simple-custom-post-order' )
 		);
 		printf(
 			'<label><input type="radio" name="scporder_options[new_post_position]" value="top" %s /> %s</label>',
 			checked( 'top', $pos, false ),
-			esc_html__( 'Add to the top of the order', 'simple-custom-post-order' )
+			esc_html__( 'Add to the top of the order (default)', 'simple-custom-post-order' )
 		);
 		echo '<p class="description">' . esc_html__( 'Where a newly created item lands in the manual order of an enabled post type.', 'simple-custom-post-order' ) . '</p>';
 		echo '</fieldset>';
@@ -1144,7 +1144,7 @@ class SCPO_Engine {
 
 	public function get_new_post_position(): string {
 		$o = get_option( 'scporder_options', [] );
-		return ( isset( $o['new_post_position'] ) && 'top' === $o['new_post_position'] ) ? 'top' : 'bottom';
+		return ( isset( $o['new_post_position'] ) && 'bottom' === $o['new_post_position'] ) ? 'bottom' : 'top';
 	}
 
 	public function is_order_column_enabled(): bool {

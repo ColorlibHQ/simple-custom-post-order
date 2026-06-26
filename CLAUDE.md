@@ -53,7 +53,7 @@ Data is passed via `wp_localize_script` as `scporder_vars`: `ajax_url` (a **root
 
 - **Posts/Pages**: native `menu_order` column in `wp_posts`.
 - **Taxonomies**: custom `term_order` column added to `wp_terms` via `ALTER TABLE` on install (`scporder_install()`), dropped on uninstall (`scporder_uninstall_db()`, multisite-aware). Presence is detected with `DESCRIBE`.
-- **Settings**: `scporder_options` option — an array with keys `objects` (post type slugs), `tags` (taxonomy slugs), `show_advanced_view` (`'1'`/`''`), `engine` (`'sortable'` default / `'classic'`), `show_handle` (`'1'` default / `'0'`), and these 2.8.0 additions: `new_post_position` (`'bottom'` default / `'top'` — where freshly created items land, #45), `order_column` (`'1'`/`'0'` default — the optional numeric Order column, #76/#89), and `allowed_roles` (array of role slugs; empty = anyone holding the reorder capability, the default). Plus flag options `scporder_install` and `scporder_notice`.
+- **Settings**: `scporder_options` option — an array with keys `objects` (post type slugs), `tags` (taxonomy slugs), `show_advanced_view` (`'1'`/`''`), `engine` (`'sortable'` default / `'classic'`), `show_handle` (`'1'` default / `'0'`), and these 2.8.0 additions: `new_post_position` (`'top'` default / `'bottom'` — where freshly created items land, #45; default was `'bottom'` in 2.8.0–2.8.1 but that silently flipped the long-standing top placement — reported by @ffusion and @deisedesign — and was reverted to `'top'` in 2.8.2), `order_column` (`'1'`/`'0'` default — the optional numeric Order column, #76/#89), and `allowed_roles` (array of role slugs; empty = anyone holding the reorder capability, the default). Plus flag options `scporder_install` and `scporder_notice`.
 
 ### AJAX endpoints, nonces, capabilities
 
@@ -81,7 +81,9 @@ All handlers use `check_ajax_referer()`, capability checks, `$wpdb->prepare()`, 
 
 ### New-item placement (2.8.0, #45)
 
-When `new_post_position` is `'top'`, newly created items of enabled non-hierarchical types are pushed to the front of their type's order (default is `'bottom'`, WordPress's native behavior). This is a separate concern from drag/column reordering — see the `#45: placement of newly created items` block in the engine.
+When `new_post_position` is `'top'` (the default), newly created items of enabled non-hierarchical types are pushed to the front of their type's order; `'bottom'` appends them instead. This is a separate concern from drag/column reordering — see the `#45: placement of newly created items` block in the engine.
+
+**Default history (2.8.2):** 2.8.0 introduced this feature defaulting to `'bottom'`, on the assumption that appending was "native." That was wrong: pre-2.8.0, a new post got `menu_order = 0`, which sorts first and `refresh()` renumbers to `1` — so new posts had always landed at the **top**. The `'bottom'` default silently flipped that for every upgraded site (the option key is absent on upgrade, and `get_new_post_position()` resolved absent → `'bottom'`), surfacing as "new/latest posts stuck at the bottom of the admin list." 2.8.2 reverts the default to `'top'`; an explicit `'bottom'` choice saved in Settings is still honored.
 
 ## Requirements
 
