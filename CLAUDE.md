@@ -59,14 +59,16 @@ Data is passed via `wp_localize_script` as `scporder_vars`: `ajax_url` (a **root
 
 | Action | Nonce (action/field) | Capability | Purpose |
 |--------|----------------------|------------|---------|
-| `update-menu-order` | `scporder_nonce_action` / `nonce` | `scporder_user_can_reorder()` † | Save post order (drag) |
-| `update-menu-order-tags` | `scporder_nonce_action` / `nonce` | `scporder_user_can_reorder()` † | Save term order (drag) |
-| `scpo_set_position` | `scporder_nonce_action` / `nonce` | `scporder_user_can_reorder()` † | Move one post to an **absolute** 1-based position (the numeric Order column). Position is across the whole type, independent of list pagination; hierarchical types are rejected. |
+| `update-menu-order` | `scporder_nonce_action` / `nonce` | `scporder_user_can_reorder()` † + per-object ‡ | Save post order (drag) |
+| `update-menu-order-tags` | `scporder_nonce_action` / `nonce` | `scporder_user_can_reorder()` † + per-object ‡ | Save term order (drag) |
+| `scpo_set_position` | `scporder_nonce_action` / `nonce` | `scporder_user_can_reorder()` † + per-object ‡ | Move one post to an **absolute** 1-based position (the numeric Order column). Position is across the whole type, independent of list pagination; hierarchical types are rejected. |
 | `scpo_reset_order` | `scpo-reset-order` / `scpo_security` | `manage_options` | Reset types to default + remove from `objects` |
 | `scporder_dismiss_notices` | `scporder_dismiss_notice` / `scporder_nonce` | (admin notice) | Dismiss setup nag |
 | `scpo_refresh_nonce` | none — intentional (see below) | `scporder_user_can_reorder()` † | Mint a fresh reorder nonce so the SortableJS client can transparently retry a save after the page nonce expires |
 
-† **`scporder_user_can_reorder()`** is the single gate for all reorder writes (2.8.0, role-based reordering): the user must hold the `scpo_capability` capability (filterable, default `edit_posts`) **and**, if `allowed_roles` is non-empty, hold one of those roles.
+† **`scporder_user_can_reorder()`** gates *access* to the reorder writes (2.8.0, role-based reordering): the user must hold the `scpo_capability` capability (filterable, default `edit_posts`) **and**, if `allowed_roles` is non-empty, hold one of those roles.
+
+‡ **Per-object authorization** (2.8.3, security hardening): the access gate alone is not enough — a broad `edit_posts`-style gate does not prove the caller may edit the *specific* IDs they submit. Every submitted ID is now validated before its order is written, via `scporder_user_can_edit_post()` (post must exist, be an enabled sortable type, and pass `current_user_can( 'edit_post', $id )`) or `scporder_user_can_edit_term()` (term must exist, be an enabled sortable taxonomy, and pass the taxonomy's `manage_terms` cap). `scpo_set_position` adds an inline `current_user_can( 'edit_post', $post_id )` check on top of its existing enabled-type/hierarchical guard. The drag handlers **reject the whole batch** (403) if any ID fails. For the usual reorder users (admins/editors) this is a no-op; it only blocks forged requests reordering objects the user can't edit (IDOR).
 
 All handlers use `check_ajax_referer()`, capability checks, `$wpdb->prepare()`, and respond via `wp_send_json_success()`/`wp_send_json_error()` — **except `scpo_refresh_nonce`, which deliberately does *not* verify a nonce** (the stale nonce is the very reason it's called). That's safe because it is an authenticated (`wp_ajax_`, non-`nopriv`) action gated on `scporder_user_can_reorder()`, and admin-ajax sends no CORS headers, so the issued nonce can't be read cross-origin — the same model WordPress core's Heartbeat uses to refresh nonces. Reorder handlers preserve the existing *set* of `menu_order`/`term_order` values and reassign them positionally (so the existing values are kept, only the row→value mapping changes).
 

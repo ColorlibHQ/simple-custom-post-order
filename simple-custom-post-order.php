@@ -3,7 +3,7 @@
  * Plugin Name: Simple Custom Post Order
  * Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
  * Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
- * Version: 2.8.2
+ * Version: 2.8.3
  * Author: Colorlib
  * Author URI: https://colorlib.com/
  * Tested up to: 7.0
@@ -36,7 +36,7 @@
 
 define( 'SCPORDER_URL', plugins_url( '', __FILE__ ) );
 define( 'SCPORDER_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SCPORDER_VERSION', '2.8.2' );
+define( 'SCPORDER_VERSION', '2.8.3' );
 
 $scporder = new SCPO_Engine();
 
@@ -484,6 +484,19 @@ class SCPO_Engine {
 			}
 		}
 
+		// Object-level authorization (defense against forged IDs / IDOR).
+		// scporder_user_can_reorder() only gates *access* to this endpoint; it
+		// does not prove the caller may edit the specific posts they submitted.
+		// Require every submitted ID to be an enabled sortable post type that the
+		// current user can actually edit, so a user holding the broad reorder
+		// capability cannot reshuffle menu_order for posts/pages they cannot edit.
+		$objects = $this->get_scporder_options_objects();
+		foreach ( $id_arr as $id ) {
+			if ( ! $this->scporder_user_can_edit_post( $id, $objects ) ) {
+				wp_send_json_error( [ 'message' => __( 'Permission denied.', 'simple-custom-post-order' ) ], 403 );
+			}
+		}
+
 		// Get current menu_order values
 		$menu_order_arr = [];
 		foreach ( $id_arr as $id ) {
@@ -557,6 +570,17 @@ class SCPO_Engine {
 				foreach ( $values as $id ) {
 					$id_arr[] = absint( $id );
 				}
+			}
+		}
+
+		// Object-level authorization (defense against forged IDs / IDOR).
+		// Require every submitted term to belong to an enabled sortable taxonomy
+		// the current user is allowed to manage, so the broad reorder capability
+		// alone cannot reshuffle term_order for taxonomies outside their reach.
+		$tags = $this->get_scporder_options_tags();
+		foreach ( $id_arr as $id ) {
+			if ( ! $this->scporder_user_can_edit_term( $id, $tags ) ) {
+				wp_send_json_error( [ 'message' => __( 'Permission denied.', 'simple-custom-post-order' ) ], 403 );
 			}
 		}
 
@@ -1179,6 +1203,70 @@ class SCPO_Engine {
 		return (bool) array_intersect( $roles, (array) $user->roles );
 	}
 
+	/**
+	 * Object-level authorization for the post reorder AJAX handlers.
+	 *
+	 * scporder_user_can_reorder() gates *access* to the endpoints; this is the
+	 * per-object counterpart that stops a user holding the broad reorder
+	 * capability from forging arbitrary IDs (an IDOR). The post must exist,
+	 * belong to an enabled sortable post type, and be editable by the current
+	 * user under that type's own capabilities — so e.g. someone who can edit
+	 * posts but not pages cannot reorder pages.
+	 *
+	 * @param int        $post_id Post ID.
+	 * @param array|null $objects Enabled post types; fetched when null.
+	 * @return bool
+	 */
+	private function scporder_user_can_edit_post( int $post_id, ?array $objects = null ): bool {
+		if ( $post_id <= 0 ) {
+			return false;
+		}
+		$post = get_post( $post_id );
+		if ( ! $post instanceof WP_Post ) {
+			return false;
+		}
+		if ( null === $objects ) {
+			$objects = $this->get_scporder_options_objects();
+		}
+		if ( ! in_array( $post->post_type, $objects, true ) ) {
+			return false;
+		}
+		return current_user_can( 'edit_post', $post_id );
+	}
+
+	/**
+	 * Object-level authorization for the term reorder AJAX handler.
+	 *
+	 * The term counterpart of scporder_user_can_edit_post(): the term must
+	 * exist, belong to an enabled sortable taxonomy, and the user must hold that
+	 * taxonomy's manage_terms capability — the same capability WordPress requires
+	 * to reach the term-list screen where reordering happens.
+	 *
+	 * @param int        $term_id Term ID.
+	 * @param array|null $tags    Enabled taxonomies; fetched when null.
+	 * @return bool
+	 */
+	private function scporder_user_can_edit_term( int $term_id, ?array $tags = null ): bool {
+		if ( $term_id <= 0 ) {
+			return false;
+		}
+		$term = get_term( $term_id );
+		if ( ! $term instanceof WP_Term ) {
+			return false;
+		}
+		if ( null === $tags ) {
+			$tags = $this->get_scporder_options_tags();
+		}
+		if ( ! in_array( $term->taxonomy, $tags, true ) ) {
+			return false;
+		}
+		$taxonomy = get_taxonomy( $term->taxonomy );
+		if ( ! $taxonomy ) {
+			return false;
+		}
+		return current_user_can( $taxonomy->cap->manage_terms );
+	}
+
 	/* ---- #45: placement of newly created items ----------------------- */
 
 	/**
@@ -1311,6 +1399,12 @@ class SCPO_Engine {
 
 		if ( ! $post || ! in_array( $post->post_type, $this->get_scporder_options_objects(), true ) || is_post_type_hierarchical( $post->post_type ) ) {
 			wp_send_json_error( [ 'message' => __( 'Invalid item.', 'simple-custom-post-order' ) ] );
+		}
+
+		// Object-level authorization: holding the reorder capability is not enough,
+		// the user must be able to edit this specific post (defense against IDOR).
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			wp_send_json_error( [ 'message' => __( 'Permission denied.', 'simple-custom-post-order' ) ], 403 );
 		}
 
 		global $wpdb;
@@ -1448,11 +1542,26 @@ class SCPO_Engine {
 			return;
 		}
 
-		if ( is_search() ) {
+		$is_admin = is_admin() && ! wp_doing_ajax();
+
+		/*
+		 * Skip our ordering during a genuine search.
+		 *
+		 * On the front end WP's is_search() is the correct signal. In the admin
+		 * it is not: WordPress marks a query as a search whenever the `s` var is
+		 * merely *present* (isset(), not a non-empty value), and the Posts list
+		 * screen's filter form — the "All dates" and category dropdowns — always
+		 * submits an empty `s=` alongside the (empty) search box. So is_search()
+		 * reads true even though nobody searched, and the manual order silently
+		 * disappeared the moment a user filtered the list. In the admin,
+		 * therefore, bail only on a *non-empty* search term; real admin searches
+		 * still carry a non-empty `s` and are skipped exactly as before. (#153)
+		 */
+		if ( ( $is_admin && '' !== $wp_query->get( 's' ) ) || ( ! $is_admin && is_search() ) ) {
 			return;
 		}
 
-		if ( is_admin() && ! wp_doing_ajax() ) {
+		if ( $is_admin ) {
 			if ( isset( $wp_query->query['post_type'] ) && ! isset( $_GET['orderby'] ) ) {
 				if ( in_array( $wp_query->query['post_type'], $objects, true ) ) {
 					if ( ! $wp_query->get( 'orderby' ) ) {

@@ -4,7 +4,7 @@ Tags: post order, custom post order, sort posts, reorder posts, drag drop order
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 7.0
-Stable tag: 2.8.2
+Stable tag: 2.8.3
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -250,6 +250,16 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 4. Reset order functionality for specific post types
 
 == Changelog ==
+
+= 2.8.3 - 2026-07-01 =
+
+**Security**
+
+* Hardened the drag-and-drop reorder AJAX endpoints with per-object permission checks. Previously any signed-in user who could reach the reorder actions (by default anyone able to edit posts) could submit arbitrary post or term IDs and change their stored order — including posts, pages, or terms they are not allowed to edit. Each submitted item is now verified to belong to an enabled sortable type **and** to be editable by the current user before its order is changed. Impact was limited to ordering only (no content was exposed or edited). Reported by the WordPress.org Plugin Review Team's automated scan.
+
+**Bug fixes**
+
+* Fixed the manual post order being ignored on the admin Posts list after using the "All dates" or category dropdown filters. Those filters submit an empty search field, which WordPress counts as a search, and the plugin was skipping its custom order for any search. The manual order now applies while filtering; genuine searches are still left untouched. Props @r-a-y (#153).
 
 = 2.8.2 - 2026-06-26 =
 

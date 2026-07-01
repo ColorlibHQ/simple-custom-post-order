@@ -1,7 +1,7 @@
 {
   "name": "simple-custom-post-order",
   "main": "Gruntfile.js",
-  "version": "2.8.0",
+  "version": "2.8.3",
   "homepage": "https://www.colorlib.com",
   "author": "Colorlib",
   "license": "GPL v3",

@@ -5,6 +5,14 @@ WordPress.org-formatted history lives in [`readme.txt`](readme.txt); this file m
 recent releases in [Keep a Changelog](https://keepachangelog.com/) style and follows
 [Semantic Versioning](https://semver.org/).
 
+## [2.8.3] - 2026-07-01
+
+### Security
+- **Per-object authorization on the reorder AJAX endpoints.** The three reorder writes (`update_menu_order`, `update_menu_order_tags`, `scpo_ajax_set_position`) previously gated only on a nonce plus the broad reorder capability (`scporder_user_can_reorder()`, default `edit_posts`) with no check that the submitted IDs were ones the user may actually edit. Any signed-in user able to reach the endpoints could forge arbitrary post/term IDs and reshuffle their stored order — including posts, pages, or terms outside their own edit permissions (a broken-object-authorization / IDOR pattern; impact bounded to ordering integrity, no content disclosure or editing). Each submitted ID is now validated — the object must exist, belong to an enabled sortable type, and pass `current_user_can( 'edit_post', $id )` (posts) or the taxonomy's `manage_terms` capability (terms) — before its order is written; the drag handlers reject the whole batch (`403`) on any unauthorized ID. No behavior change for the usual reorder users (administrators/editors). Reported by the WordPress.org Plugin Review Team's automated scan.
+
+### Fixed
+- Manual post order is no longer ignored on the admin Posts list after using the **"All dates"** or **category** dropdown filters. Those filters submit an empty search field (`s=`) alongside the search box, and WordPress flags any query with the `s` var *present* as a search (`is_search()` keys off `isset()`, not a non-empty value) — so the plugin was skipping its custom order whenever a filter was applied. The order now applies while filtering; genuine searches (a non-empty term in admin, `is_search()` on the front end) are still left untouched. Props [@r-a-y](https://github.com/r-a-y) (#153).
+
 ## [2.8.2] - 2026-06-26
 
 ### Fixed
