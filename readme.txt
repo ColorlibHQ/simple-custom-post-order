@@ -4,7 +4,7 @@ Tags: post order, custom post order, sort posts, reorder posts, drag drop order
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 7.0
-Stable tag: 2.8.3
+Stable tag: 2.8.4
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -250,6 +250,12 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 4. Reset order functionality for specific post types
 
 == Changelog ==
+
+= 2.8.4 - 2026-07-14 =
+
+**Performance**
+
+* Fixed very slow WordPress admin on sites with many posts. The plugin's order-normalization routine (`refresh()`) ran on *every* admin page — Dashboard, Plugins, Tools, Settings — even those that never display a sortable list. On large sites it re-numbered thousands of rows one query at a time, adding thousands of database queries and several seconds of load time to unrelated screens (one report measured ~9.5s and 14,000+ queries on the Plugins page with ~3,000 posts). It now runs only on the post/taxonomy list screens where the manual order is actually shown, and renumbers rows in a single batched query instead of one-per-row. No change to how ordering behaves. Reported by @crossy.
 
 = 2.8.3 - 2026-07-01 =
 
@@ -518,6 +524,9 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 * Initial release
 
 == Upgrade Notice ==
+
+= 2.8.4 =
+Performance fix: the admin was slow on sites with many posts because the plugin ran its order normalization on every admin page. It now runs only on the sortable list screens and uses a single batched query. Recommended for all users, especially large sites.
 
 = 2.8.0 =
 New: choose where new items are placed, an optional editable "Order" number column (great for paginated lists), and role-based reordering control.

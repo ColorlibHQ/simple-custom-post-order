@@ -3,7 +3,7 @@
  * Plugin Name: Simple Custom Post Order
  * Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
  * Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
- * Version: 2.8.3
+ * Version: 2.8.4
  * Author: Colorlib
  * Author URI: https://colorlib.com/
  * Tested up to: 7.0
@@ -36,7 +36,7 @@
 
 define( 'SCPORDER_URL', plugins_url( '', __FILE__ ) );
 define( 'SCPORDER_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SCPORDER_VERSION', '2.8.3' );
+define( 'SCPORDER_VERSION', '2.8.4' );
 
 $scporder = new SCPO_Engine();
 
@@ -369,9 +369,32 @@ class SCPO_Engine {
 		return $query ? $path . '?' . $query : $path;
 	}
 
+	/**
+	 * Re-normalize menu_order / term_order into a gapless 1..N sequence for
+	 * enabled types, preserving the saved relative order.
+	 *
+	 * Only runs on the admin list screens where that order is actually
+	 * read/displayed — the same screens the sorter loads on (`_check_load_script_css()`).
+	 * It used to run unconditionally on every `admin_init`, so on large sites it
+	 * added a COUNT-per-type plus (when the order wasn't already gapless) a full
+	 * table renumber to *every* admin page — plugins.php, Dashboard, Tools,
+	 * Settings — producing thousands of queries and multi-second TTFB on screens
+	 * that never show the order (reported on wordpress.org). Nothing needs the
+	 * numbering to be gapless to be correct: drag saves preserve the existing set
+	 * of values, the numeric Order column and new-item placement compute from the
+	 * live rows, and every read (`pre_get_posts`, adjacent-post nav, term sorting)
+	 * uses `ORDER BY … / … <>` which sorts correctly with gaps. So the tidy-up is
+	 * only needed right before the ordered list is rendered.
+	 *
+	 * @return void
+	 */
 	public function refresh(): void {
 
 		if ( scporder_doing_ajax() ) {
+			return;
+		}
+
+		if ( ! $this->_check_load_script_css() ) {
 			return;
 		}
 
@@ -390,18 +413,19 @@ class SCPO_Engine {
 					",
 					$object
 				);
-				
+
 				$result = $wpdb->get_results( $query );
 
-				if ( 0 === (int) $result[0]->cnt || $result[0]->cnt === $result[0]->max ) {
+				if ( 0 === (int) $result[0]->cnt || (int) $result[0]->cnt === (int) $result[0]->max ) {
 					continue;
 				}
 
 				// Re-number menu_order into a gapless 1..N sequence, preserving the
-				// existing relative order. Done in PHP rather than via a single UPDATE
-				// using a MySQL user variable (@row_number): that "rank inside a derived
-				// table" trick has undefined evaluation order on MariaDB / MySQL 8 and
-				// could scramble the saved order (PR #147 / issue #119).
+				// existing relative order. Done by reading the ordered IDs and writing
+				// them back rather than via a single UPDATE using a MySQL user variable
+				// (@row_number): that "rank inside a derived table" trick has undefined
+				// evaluation order on MariaDB / MySQL 8 and could scramble the saved
+				// order (PR #147 / issue #119).
 				$object      = sanitize_key( $object );
 				$ordered_ids = $wpdb->get_col(
 					$wpdb->prepare(
@@ -411,9 +435,7 @@ class SCPO_Engine {
 						$object
 					)
 				);
-				foreach ( $ordered_ids as $position => $id ) {
-					$wpdb->update( $wpdb->posts, [ 'menu_order' => $position + 1 ], [ 'ID' => (int) $id ] );
-				}
+				$this->renumber_rows( $wpdb->posts, 'ID', 'menu_order', $ordered_ids );
 
 			}
 		}
@@ -430,26 +452,71 @@ class SCPO_Engine {
 					$taxonomy
 				);
 				$result = $wpdb->get_results( $query );
-				if ( 0 === (int) $result[0]->cnt || $result[0]->cnt === $result[0]->max ) {
+				if ( 0 === (int) $result[0]->cnt || (int) $result[0]->cnt === (int) $result[0]->max ) {
 					continue;
 				}
 
-				$query = $wpdb->prepare(
-					"
-					SELECT terms.term_id
-					FROM $wpdb->terms AS terms
-					INNER JOIN $wpdb->term_taxonomy AS term_taxonomy ON ( terms.term_id = term_taxonomy.term_id )
-					WHERE term_taxonomy.taxonomy = %s
-					ORDER BY term_order ASC
-					",
-					$taxonomy
+				$ordered_ids = $wpdb->get_col(
+					$wpdb->prepare(
+						"
+						SELECT terms.term_id
+						FROM $wpdb->terms AS terms
+						INNER JOIN $wpdb->term_taxonomy AS term_taxonomy ON ( terms.term_id = term_taxonomy.term_id )
+						WHERE term_taxonomy.taxonomy = %s
+						ORDER BY term_order ASC
+						",
+						$taxonomy
+					)
 				);
-				
-				$results = $wpdb->get_results( $query );
-				foreach ( $results as $key => $result ) {
-					$wpdb->update( $wpdb->terms, array( 'term_order' => $key + 1 ), array( 'term_id' => $result->term_id ) );
-				}
+				$this->renumber_rows( $wpdb->terms, 'term_id', 'term_order', $ordered_ids );
 			}
+		}
+	}
+
+	/**
+	 * Write a gapless 1..N sequence into an order column for the given rows, in
+	 * the fewest queries possible.
+	 *
+	 * Replaces the previous one-UPDATE-per-row loop, which issued N write queries
+	 * per dirty type and — combined with refresh() running on every admin page —
+	 * produced the thousands-of-queries / multi-second TTFB reported on large
+	 * sites. Rows are renumbered with a single `CASE` statement, chunked so the
+	 * generated SQL stays well under `max_allowed_packet` on any host. Every ID
+	 * and position is bound through `$wpdb->prepare()`; only the internal table /
+	 * column identifiers (all `$wpdb->*` constants, never user input) are
+	 * interpolated.
+	 *
+	 * @param string $table        Table name ( $wpdb->posts or $wpdb->terms ).
+	 * @param string $id_column    Primary-key column ( 'ID' or 'term_id' ).
+	 * @param string $order_column Order column to rewrite ( 'menu_order' or 'term_order' ).
+	 * @param array  $ordered_ids  Row IDs already in the desired order.
+	 * @return void
+	 */
+	private function renumber_rows( string $table, string $id_column, string $order_column, array $ordered_ids ): void {
+		global $wpdb;
+
+		$ordered_ids = array_values( array_map( 'intval', (array) $ordered_ids ) );
+		if ( empty( $ordered_ids ) ) {
+			return;
+		}
+
+		$position = 1;
+		foreach ( array_chunk( $ordered_ids, 1000 ) as $chunk ) {
+			$cases  = '';
+			$args   = [];
+			$in     = implode( ', ', array_fill( 0, count( $chunk ), '%d' ) );
+			foreach ( $chunk as $id ) {
+				$cases .= ' WHEN %d THEN %d';
+				$args[] = $id;
+				$args[] = $position;
+				++$position;
+			}
+			// Identifiers are internal ( $wpdb->posts/terms, fixed column names );
+			// all values are bound via prepare(). The WHERE limits the update to the
+			// listed IDs, so every row matches a WHEN — ELSE just guards against ever
+			// writing NULL.
+			$sql = "UPDATE $table SET $order_column = CASE $id_column{$cases} ELSE $order_column END WHERE $id_column IN ($in)";
+			$wpdb->query( $wpdb->prepare( $sql, array_merge( $args, $chunk ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 		}
 	}
 

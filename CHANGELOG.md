@@ -5,6 +5,14 @@ WordPress.org-formatted history lives in [`readme.txt`](readme.txt); this file m
 recent releases in [Keep a Changelog](https://keepachangelog.com/) style and follows
 [Semantic Versioning](https://semver.org/).
 
+## [2.8.4] - 2026-07-14
+
+### Fixed
+- **Very slow admin on sites with many posts.** The order-normalization routine `refresh()` was hooked on `admin_init` with no screen check, so it ran on *every* admin page — Dashboard, Plugins, Tools, Settings — not just the sortable list screens. On each run it issued a `COUNT`/`MAX` per enabled type and, whenever a type's order wasn't already gapless, renumbered the whole type **one `UPDATE` per row**. On a site with ~3,000 posts across several enabled types that meant thousands of queries and multi-second TTFB on pages that never display a sortable list (one report measured ~9.5s and 14,000+ queries on `plugins.php`). `refresh()` now runs only on the post/taxonomy list screens where the manual order is actually shown (gated by the same `_check_load_script_css()` check the sorter uses), and off-list admin pages do zero order work. Reported by [@crossy](https://wordpress.org/support/users/crossy/).
+
+### Changed
+- The order renumber now writes a gapless `1..N` sequence in a **single chunked `CASE` `UPDATE`** (batched at 1,000 rows, `max_allowed_packet`-safe, fully `$wpdb->prepare()`-bound) via a new internal `renumber_rows()` helper, instead of one `UPDATE` per row. A dirty list of 2,500 items now normalizes in ~5 queries instead of ~2,500. No change to ordering behavior — every read already tolerates gaps (`ORDER BY menu_order`/`term_order`), so the numbering is only tidied right before the ordered list is rendered.
+
 ## [2.8.3] - 2026-07-01
 
 ### Security
