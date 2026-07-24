@@ -518,6 +518,33 @@ class SCPO_Engine {
 			$sql = "UPDATE $table SET $order_column = CASE $id_column{$cases} ELSE $order_column END WHERE $id_column IN ($in)";
 			$wpdb->query( $wpdb->prepare( $sql, array_merge( $args, $chunk ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 		}
+
+		// The chunked UPDATE is a raw write and never runs through
+		// clean_post_cache()/clean_term_cache(), so under a persistent object
+		// cache the renumbered rows keep their pre-renumber value. Invalidate the
+		// affected group once (O(1)) instead of looping over every renumbered row.
+		if ( $wpdb->posts === $table ) {
+			$this->scpo_invalidate_group_cache( 'posts' );
+		} elseif ( $wpdb->terms === $table ) {
+			$this->scpo_invalidate_group_cache( 'terms' );
+		}
+	}
+
+	/**
+	 * Invalidate a whole object-cache group after a raw order write.
+	 *
+	 * Prefers wp_cache_flush_group() (supported by persistent backends such as
+	 * the Redis Object Cache plugin as a cheap group-version bump). Where the
+	 * backend does not support group flushing this call is a safe no-op, so it
+	 * never forces a full cache flush. Runs only on admin-side order writes.
+	 *
+	 * @param string $group Object cache group to invalidate.
+	 * @return void
+	 */
+	private function scpo_invalidate_group_cache( string $group ): void {
+		if ( function_exists( 'wp_cache_flush_group' ) && wp_cache_supports( 'flush_group' ) ) {
+			wp_cache_flush_group( $group );
+		}
 	}
 
 	/**
@@ -1369,6 +1396,14 @@ class SCPO_Engine {
 				)
 			);
 			$wpdb->update( $wpdb->posts, [ 'menu_order' => 1 ], [ 'ID' => $post_id ] );
+
+			// The bulk +1 above is a raw write, so the shifted posts keep their
+			// old menu_order in a persistent object cache (e.g. Redis), showing as
+			// duplicate order values in the admin list. Invalidate the whole posts
+			// group in one O(1) call rather than looping clean_post_cache() over
+			// every shifted row (which would scale with the site's post count).
+			// Fires only on new-post placement, never on a front-end render.
+			$this->scpo_invalidate_group_cache( 'posts' );
 		} else {
 			$max = (int) $wpdb->get_var(
 				$wpdb->prepare(
