@@ -4,7 +4,7 @@ Tags: post order, custom post order, sort posts, reorder posts, drag drop order
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 7.0
-Stable tag: 2.8.4
+Stable tag: 2.8.5
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -250,6 +250,20 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 4. Reset order functionality for specific post types
 
 == Changelog ==
+
+= 2.8.5 - 2026-07-27 =
+
+**Bug fixes**
+
+* Fixed stale and duplicated order numbers on sites running a persistent object cache (Redis, Memcached, etc.). Creating a post and tidying up the order both wrote straight to the database without telling WordPress to refresh its cached copies, so admin lists kept showing the old numbers until the cache was flushed by hand. Every order write now clears the cache for the rows it touched. Reported by @raveendrawpc (#154).
+* Fixed taxonomy terms coming back in the **wrong order on the front end** from that same cause. Unlike posts, term order is applied in PHP using each term's stored order value — and that value comes from the cache, so a stale entry produced genuinely wrong ordering, not just wrong-looking numbers in the admin.
+* Fixed reordering terms clearing the wrong cache entries on sites where a term's ID and its internal taxonomy ID have drifted apart (common on older or heavily migrated sites).
+* Fixed the order not being tidied up in one edge case where the numbering looked correct but started below 1.
+
+**Performance**
+
+* Publishing is now much faster on large sites. With "New items" set to *Top* (the default), creating a single post rewrote the order value of **every other post of that type** — thousands of rows on a big site, on every publish. New items are now placed with a single-row update. Where they land is unchanged.
+* Enabling a post type or taxonomy in Settings now numbers the existing items in one batched query instead of one query per item.
 
 = 2.8.4 - 2026-07-14 =
 
@@ -524,6 +538,9 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 * Initial release
 
 == Upgrade Notice ==
+
+= 2.8.5 =
+Fixes stale order numbers on sites using a persistent object cache (Redis/Memcached), and wrong front-end term order caused by the same issue. Also makes publishing much faster on large sites. Recommended for all users.
 
 = 2.8.4 =
 Performance fix: the admin was slow on sites with many posts because the plugin ran its order normalization on every admin page. It now runs only on the sortable list screens and uses a single batched query. Recommended for all users, especially large sites.

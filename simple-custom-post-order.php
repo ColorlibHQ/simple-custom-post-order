@@ -3,7 +3,7 @@
  * Plugin Name: Simple Custom Post Order
  * Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
  * Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
- * Version: 2.8.4
+ * Version: 2.8.5
  * Author: Colorlib
  * Author URI: https://colorlib.com/
  * Tested up to: 7.0
@@ -36,7 +36,7 @@
 
 define( 'SCPORDER_URL', plugins_url( '', __FILE__ ) );
 define( 'SCPORDER_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SCPORDER_VERSION', '2.8.4' );
+define( 'SCPORDER_VERSION', '2.8.5' );
 
 $scporder = new SCPO_Engine();
 
@@ -416,7 +416,7 @@ class SCPO_Engine {
 
 				$result = $wpdb->get_results( $query );
 
-				if ( 0 === (int) $result[0]->cnt || (int) $result[0]->cnt === (int) $result[0]->max ) {
+				if ( $this->is_already_sequential( $result[0] ?? null ) ) {
 					continue;
 				}
 
@@ -452,7 +452,7 @@ class SCPO_Engine {
 					$taxonomy
 				);
 				$result = $wpdb->get_results( $query );
-				if ( 0 === (int) $result[0]->cnt || (int) $result[0]->cnt === (int) $result[0]->max ) {
+				if ( $this->is_already_sequential( $result[0] ?? null ) ) {
 					continue;
 				}
 
@@ -468,9 +468,33 @@ class SCPO_Engine {
 						$taxonomy
 					)
 				);
-				$this->renumber_rows( $wpdb->terms, 'term_id', 'term_order', $ordered_ids );
+				$this->renumber_rows( $wpdb->terms, 'term_id', 'term_order', $ordered_ids, $taxonomy );
 			}
 		}
+	}
+
+	/**
+	 * Whether an order column is already a gapless 1..N sequence, judged from the
+	 * COUNT/MAX/MIN probe its callers run before deciding to renumber.
+	 *
+	 * Both `MAX === COUNT` and `MIN === 1` have to hold. The previous check
+	 * tested MAX alone, so a set like {-1, 2, 3, 4, 5} (COUNT 5, MAX 5) read as
+	 * clean and skipped renumbering. That became reachable once top placement
+	 * started writing a value below the current minimum instead of shifting every
+	 * other row, and would have left a negative number showing in the Order
+	 * column. Ordering itself was never affected — reads sort on the raw value.
+	 *
+	 * @param object|null $probe Row exposing cnt / max / min.
+	 * @return bool True when there is nothing to renumber.
+	 */
+	private function is_already_sequential( $probe ): bool {
+		if ( ! is_object( $probe ) ) {
+			return true;
+		}
+
+		$count = (int) $probe->cnt;
+
+		return 0 === $count || ( $count === (int) $probe->max && 1 === (int) $probe->min );
 	}
 
 	/**
@@ -490,9 +514,12 @@ class SCPO_Engine {
 	 * @param string $id_column    Primary-key column ( 'ID' or 'term_id' ).
 	 * @param string $order_column Order column to rewrite ( 'menu_order' or 'term_order' ).
 	 * @param array  $ordered_ids  Row IDs already in the desired order.
+	 * @param string $taxonomy     Taxonomy the IDs belong to, when renumbering terms.
+	 *                             Required for correct cache invalidation (see
+	 *                             invalidate_order_cache()); ignored for posts.
 	 * @return void
 	 */
-	private function renumber_rows( string $table, string $id_column, string $order_column, array $ordered_ids ): void {
+	private function renumber_rows( string $table, string $id_column, string $order_column, array $ordered_ids, string $taxonomy = '' ): void {
 		global $wpdb;
 
 		$ordered_ids = array_values( array_map( 'intval', (array) $ordered_ids ) );
@@ -517,6 +544,89 @@ class SCPO_Engine {
 			// writing NULL.
 			$sql = "UPDATE $table SET $order_column = CASE $id_column{$cases} ELSE $order_column END WHERE $id_column IN ($in)";
 			$wpdb->query( $wpdb->prepare( $sql, array_merge( $args, $chunk ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		}
+
+		$this->invalidate_order_cache( $table, $ordered_ids, $taxonomy );
+	}
+
+	/**
+	 * Drop the object-cache entries for rows whose order column was written with
+	 * a raw query.
+	 *
+	 * Raw `$wpdb` writes never pass through clean_post_cache()/clean_term_cache(),
+	 * so with a persistent object cache (Redis, Memcached) the affected rows keep
+	 * serving their pre-write `menu_order`/`term_order`. Symptoms: stale or
+	 * duplicated values in the numeric Order column, and — because taxcmp()
+	 * re-sorts terms in PHP on the *cached* `$term->term_order` — genuinely wrong
+	 * term order on the front end too. Reported in PR #154.
+	 *
+	 * Strategy depends on how many rows changed. Per-row invalidation is precise
+	 * but O(N); a group flush is O(1) but discards every cached post/term on the
+	 * site. Small writes (the overwhelmingly common case) therefore invalidate
+	 * row by row, and only a bulk renumber past the threshold falls back to the
+	 * group flush. Backends without flush_group support (some Memcached drop-ins,
+	 * older Redis Object Cache builds) always take the per-row path, so the fix
+	 * holds everywhere rather than silently no-op'ing.
+	 *
+	 * @param string $table    Table that was written ( $wpdb->posts or $wpdb->terms ).
+	 * @param array  $ids      IDs whose order column changed.
+	 * @param string $taxonomy Taxonomy the IDs belong to, when invalidating terms.
+	 *                         clean_term_cache() treats a bare ID list as
+	 *                         term_taxonomy_ids when no taxonomy is passed, which
+	 *                         busts the wrong rows wherever term_id and
+	 *                         term_taxonomy_id have diverged.
+	 * @return void
+	 */
+	private function invalidate_order_cache( string $table, array $ids, string $taxonomy = '' ): void {
+		global $wpdb;
+
+		$ids = array_values( array_filter( array_map( 'intval', $ids ) ) );
+		if ( empty( $ids ) ) {
+			return;
+		}
+
+		$is_posts = ( $wpdb->posts === $table );
+		if ( ! $is_posts && $wpdb->terms !== $table ) {
+			return;
+		}
+
+		/**
+		 * Row count above which a whole-group cache flush is cheaper than
+		 * invalidating each row individually.
+		 *
+		 * @param int    $threshold Number of rows. Default 500.
+		 * @param string $table     Table being invalidated.
+		 */
+		$threshold = (int) apply_filters( 'scpo_cache_flush_group_threshold', 500, $table );
+
+		if ( count( $ids ) > $threshold && function_exists( 'wp_cache_supports' ) && wp_cache_supports( 'flush_group' ) ) {
+			wp_cache_flush_group( $is_posts ? 'posts' : 'terms' );
+			return;
+		}
+
+		if ( $is_posts ) {
+			foreach ( $ids as $id ) {
+				clean_post_cache( $id );
+			}
+			return;
+		}
+
+		if ( '' !== $taxonomy ) {
+			clean_term_cache( $ids, $taxonomy );
+			return;
+		}
+
+		// No taxonomy supplied — resolve it per term rather than letting
+		// clean_term_cache() reinterpret the IDs as term_taxonomy_ids.
+		$by_taxonomy = [];
+		foreach ( $ids as $id ) {
+			$term = get_term( $id );
+			if ( $term instanceof WP_Term ) {
+				$by_taxonomy[ $term->taxonomy ][] = $id;
+			}
+		}
+		foreach ( $by_taxonomy as $term_taxonomy => $term_ids ) {
+			clean_term_cache( $term_ids, $term_taxonomy );
 		}
 	}
 
@@ -600,9 +710,7 @@ class SCPO_Engine {
 		}
 
 		// Targeted cache invalidation - only for posts we actually changed
-		foreach ( $updated_ids as $post_id ) {
-			clean_post_cache( $post_id );
-		}
+		$this->invalidate_order_cache( $wpdb->posts, $updated_ids );
 
 		do_action( 'scp_update_menu_order' );
 
@@ -686,10 +794,11 @@ class SCPO_Engine {
 			}
 		}
 
-		// Targeted cache invalidation - only for terms we actually changed
-		foreach ( $updated_ids as $term_id ) {
-			clean_term_cache( $term_id );
-		}
+		// Targeted cache invalidation - only for terms we actually changed. The
+		// helper resolves each term's taxonomy first: clean_term_cache() reads a
+		// bare ID list as term_taxonomy_ids, which busts the wrong entries on any
+		// site where term_id and term_taxonomy_id have drifted apart.
+		$this->invalidate_order_cache( $wpdb->terms, $updated_ids );
 
 		do_action( 'scp_update_menu_order_tags' );
 
@@ -913,12 +1022,12 @@ class SCPO_Engine {
 					)
 				);
 
-				if ( 0 === (int) $result[0]->cnt || $result[0]->cnt === $result[0]->max ) {
+				if ( $this->is_already_sequential( $result[0] ?? null ) ) {
 					continue;
 				}
 
 				if ( 'page' === $object ) {
-					$results = $wpdb->get_results(
+					$ordered_ids = $wpdb->get_col(
 						$wpdb->prepare(
 							"SELECT ID FROM $wpdb->posts
 							WHERE post_type = %s AND post_status IN ('publish', 'pending', 'draft', 'private', 'future')
@@ -927,7 +1036,7 @@ class SCPO_Engine {
 						)
 					);
 				} else {
-					$results = $wpdb->get_results(
+					$ordered_ids = $wpdb->get_col(
 						$wpdb->prepare(
 							"SELECT ID FROM $wpdb->posts
 							WHERE post_type = %s AND post_status IN ('publish', 'pending', 'draft', 'private', 'future')
@@ -937,9 +1046,11 @@ class SCPO_Engine {
 					);
 				}
 
-				foreach ( $results as $key => $result ) {
-					$wpdb->update( $wpdb->posts, [ 'menu_order' => $key + 1 ], [ 'ID' => $result->ID ] );
-				}
+				// Seeding used to run one UPDATE per row with no cache invalidation
+				// at all. renumber_rows() batches the write and busts the object
+				// cache, so a newly enabled type is not left serving stale
+				// menu_order values from Redis/Memcached.
+				$this->renumber_rows( $wpdb->posts, 'ID', 'menu_order', $ordered_ids );
 			}
 		}
 
@@ -957,11 +1068,11 @@ class SCPO_Engine {
 					)
 				);
 
-				if ( 0 === (int) $result[0]->cnt || $result[0]->cnt === $result[0]->max ) {
+				if ( $this->is_already_sequential( $result[0] ?? null ) ) {
 					continue;
 				}
 
-				$results = $wpdb->get_results(
+				$ordered_ids = $wpdb->get_col(
 					$wpdb->prepare(
 						"SELECT terms.term_id
 						FROM $wpdb->terms AS terms
@@ -972,9 +1083,7 @@ class SCPO_Engine {
 					)
 				);
 
-				foreach ( $results as $key => $result ) {
-					$wpdb->update( $wpdb->terms, [ 'term_order' => $key + 1 ], [ 'term_id' => $result->term_id ] );
-				}
+				$this->renumber_rows( $wpdb->terms, 'term_id', 'term_order', $ordered_ids, $taxonomy );
 			}
 		}
 
@@ -1359,27 +1468,42 @@ class SCPO_Engine {
 		}
 
 		global $wpdb;
-		if ( 'top' === $this->get_new_post_position() ) {
-			$wpdb->query(
-				$wpdb->prepare(
-					"UPDATE $wpdb->posts SET menu_order = menu_order + 1
-					WHERE post_type = %s AND ID <> %d AND post_status IN ('publish','pending','draft','private','future')",
-					$post->post_type,
-					$post_id
-				)
-			);
-			$wpdb->update( $wpdb->posts, [ 'menu_order' => 1 ], [ 'ID' => $post_id ] );
+
+		// Both branches move exactly one row: the new post is placed just outside
+		// the current range rather than shifting every sibling to make room.
+		//
+		// 'top' used to run `menu_order = menu_order + 1` across the whole post
+		// type, which cost an O(N) write on every publish and — being a raw query —
+		// left all N shifted rows stale in a persistent object cache (PR #154).
+		// Writing MIN - 1 gets the same placement from a single-row update, so the
+		// clean_post_cache() below is complete on its own. Gaps and negatives are
+		// fine: every read sorts on the raw value, and refresh() normalises the
+		// type back to 1..N the next time its list screen is rendered.
+		$to_top = ( 'top' === $this->get_new_post_position() );
+
+		// $aggregate is one of two hard-coded literals, never user input; every
+		// value in the statement is still bound through prepare().
+		$aggregate = $to_top ? 'MIN' : 'MAX';
+		$sql       = "SELECT $aggregate(menu_order) FROM $wpdb->posts
+			WHERE post_type = %s AND ID <> %d AND post_status IN ('publish','pending','draft','private','future')";
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$boundary = $wpdb->get_var( $wpdb->prepare( $sql, $post->post_type, $post_id ) );
+
+		if ( null === $boundary ) {
+			$menu_order = 1; // No siblings yet — first item of the type starts the sequence.
 		} else {
-			$max = (int) $wpdb->get_var(
-				$wpdb->prepare(
-					"SELECT MAX(menu_order) FROM $wpdb->posts
-					WHERE post_type = %s AND ID <> %d AND post_status IN ('publish','pending','draft','private','future')",
-					$post->post_type,
-					$post_id
-				)
-			);
-			$wpdb->update( $wpdb->posts, [ 'menu_order' => $max + 1 ], [ 'ID' => $post_id ] );
+			$menu_order = $to_top ? (int) $boundary - 1 : (int) $boundary + 1;
 		}
+
+		// menu_order 0 is this handler's "not yet placed" sentinel (see the guard
+		// above), so never write it — a post landing on 0 would be re-placed on
+		// every subsequent save. Stepping past it keeps the post at the top.
+		if ( 0 === $menu_order ) {
+			$menu_order = $to_top ? -1 : 1;
+		}
+
+		$wpdb->update( $wpdb->posts, [ 'menu_order' => $menu_order ], [ 'ID' => $post_id ] );
 		clean_post_cache( $post_id );
 	}
 

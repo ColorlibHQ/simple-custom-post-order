@@ -5,6 +5,21 @@ WordPress.org-formatted history lives in [`readme.txt`](readme.txt); this file m
 recent releases in [Keep a Changelog](https://keepachangelog.com/) style and follows
 [Semantic Versioning](https://semver.org/).
 
+## [2.8.5] - 2026-07-27
+
+### Fixed
+- **Stale order values under a persistent object cache.** Every order write in the plugin is a raw `$wpdb` query, so none of them passed through `clean_post_cache()`/`clean_term_cache()`. With Redis/Memcached in play, the written rows kept serving their pre-write `menu_order`/`term_order` — showing as stale or duplicated numbers in the admin Order column until the cache was flushed by hand. Two paths were entirely uncovered: the gapless renumber (`renumber_rows()`) and the sibling shift in new-item placement. Order writes now funnel through a single `invalidate_order_cache()` helper. Reported by [@raveendrawpc](https://github.com/raveendrawpc) (#154).
+- **Wrong taxonomy term order on the front end,** from the same root cause. Post ordering really is applied in SQL (`ORDER BY menu_order`), so it reads the live value — but term ordering is re-sorted in PHP by `taxcmp()` on `$term->term_order`, and those `WP_Term` objects come from the object cache. A stale entry therefore produced genuinely wrong term order for visitors, not merely wrong-looking numbers in wp-admin.
+- **Term reorders busting the wrong cache entries.** `clean_term_cache()` interprets a bare ID list as **term_taxonomy_ids**, not term_ids, so the existing `clean_term_cache( $term_id )` calls in the drag handler cleared the wrong rows anywhere the two identifiers have diverged. Callers that know the taxonomy now pass it; the drag handler's IDs are resolved per term.
+- **A blind spot in the "already gapless?" skip guard.** The pre-check compared `MAX` against `COUNT` only, so a set like `{-1, 2, 3, 4, 5}` read as clean and skipped renumbering. It now also requires `MIN === 1` (`is_already_sequential()`).
+
+### Changed
+- **New-item placement is a single-row write.** With `new_post_position` set to `'top'` (the default), publishing ran `UPDATE … SET menu_order = menu_order + 1` across the entire post type — an O(N) write on *every* publish, and, being raw SQL, one that left all N shifted rows stale in the object cache. Top placement now writes `MIN(menu_order) - 1` and bottom writes `MAX(menu_order) + 1`, so both touch exactly one row and the existing `clean_post_cache( $post_id )` covers them. Ordering is unchanged: gaps and negatives sort correctly, and `refresh()` normalizes back to `1..N` before the list screen renders. `menu_order = 0` is never written, as that is the handler's "not yet placed" sentinel.
+- Seeding a newly enabled post type or taxonomy in `sanitize_options()` now goes through `renumber_rows()` — one batched `CASE` UPDATE plus cache invalidation, instead of one `$wpdb->update()` per row with none.
+
+### Added
+- Filter `scpo_cache_flush_group_threshold` (`int`, default `500`; args `$threshold, $table`) — the row count above which `invalidate_order_cache()` prefers a single `wp_cache_flush_group()` to per-row invalidation. Below the threshold it invalidates row by row, so an ordinary drag save no longer discards every cached post on the site; above it, and only where the backend reports `wp_cache_supports( 'flush_group' )`, it takes the O(1) group flush. Backends without group-flush support always use the per-row path, so the fix applies everywhere rather than silently doing nothing.
+
 ## [2.8.4] - 2026-07-14
 
 ### Fixed
