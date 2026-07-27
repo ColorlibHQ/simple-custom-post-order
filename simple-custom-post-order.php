@@ -3,7 +3,7 @@
  * Plugin Name: Simple Custom Post Order
  * Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
  * Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
- * Version: 2.8.5
+ * Version: 2.8.6
  * Author: Colorlib
  * Author URI: https://colorlib.com/
  * Tested up to: 7.0
@@ -36,7 +36,7 @@
 
 define( 'SCPORDER_URL', plugins_url( '', __FILE__ ) );
 define( 'SCPORDER_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SCPORDER_VERSION', '2.8.5' );
+define( 'SCPORDER_VERSION', '2.8.6' );
 
 $scporder = new SCPO_Engine();
 
@@ -1541,9 +1541,27 @@ class SCPO_Engine {
 		if ( 'scpo_order' !== $column ) {
 			return;
 		}
+
+		$order = (int) get_post_field( 'menu_order', $post_id );
+
+		// `scpo_set_position` requires edit_post on this specific row (2.8.3), but
+		// the column itself is registered off the broad reorder capability. Where
+		// the two disagree — most often a CPT registered with a custom
+		// `capability_type` and no `map_meta_cap`, so even administrators fail the
+		// meta-cap check — an editable input would render and then reject every
+		// save. Show the number read-only instead of a control that cannot work.
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			printf(
+				'<span class="scpo-order-static" title="%s">%d</span>',
+				esc_attr__( 'You do not have permission to reorder this item.', 'simple-custom-post-order' ),
+				$order
+			);
+			return;
+		}
+
 		printf(
 			'<input type="number" class="scpo-order-input small-text" value="%d" min="1" step="1" data-id="%d" aria-label="%s" />',
-			(int) get_post_field( 'menu_order', $post_id ),
+			$order,
 			$post_id,
 			esc_attr__( 'Set position', 'simple-custom-post-order' )
 		);
@@ -1562,13 +1580,19 @@ class SCPO_Engine {
 		wp_localize_script( 'scpo-order-column', 'scpoOrderCol', [
 			'ajax_url' => $this->get_ajax_url(),
 			'nonce'    => wp_create_nonce( 'scporder_nonce_action' ),
+			// `error` is the last-resort fallback. The script prefers the server's
+			// own message, and uses the two specific strings below where it can tell
+			// the failure apart — one generic alert for every cause made these
+			// reports impossible to diagnose from the user's description.
 			'error'    => __( 'Couldn’t update the order — please try again.', 'simple-custom-post-order' ),
+			'expired'  => __( 'Your session expired and the order wasn’t saved. Please reload the page and try again.', 'simple-custom-post-order' ),
+			'network'  => __( 'Couldn’t reach the server, so the order wasn’t saved. Check your connection and try again.', 'simple-custom-post-order' ),
 		] );
 		add_action( 'admin_print_styles', [ $this, 'print_order_column_style' ] );
 	}
 
 	public function print_order_column_style(): void {
-		echo '<style>.column-scpo_order{width:70px}.scpo-order-input{width:58px}.scpo-order-input.is-saving{opacity:.5;pointer-events:none}</style>';
+		echo '<style>.column-scpo_order{width:70px}.scpo-order-input{width:58px}.scpo-order-input.is-saving{opacity:.5;pointer-events:none}.scpo-order-static{color:#646970;cursor:help}</style>';
 	}
 
 	/**

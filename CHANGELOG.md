@@ -5,6 +5,18 @@ WordPress.org-formatted history lives in [`readme.txt`](readme.txt); this file m
 recent releases in [Keep a Changelog](https://keepachangelog.com/) style and follows
 [Semantic Versioning](https://semver.org/).
 
+## [2.8.6] - 2026-07-27
+
+### Fixed
+- **"Couldn't update the order — please try again" from the numeric Order column.** The column script had none of the resilience the drag-and-drop sorter has had since 2.7.0, and collapsed every possible failure into one alert. Three distinct causes produced that identical message:
+  - **Expired nonce.** `check_ajax_referer()` answers `-1`/403, which the script treated as a flat failure with no recovery. A list screen left open past the nonce window — or any site whose security plugin shortens `nonce_life` — failed every Order-column save until the page was manually reloaded, while drag-and-drop on the same screen kept working. The script now detects the `-1` body, fetches a fresh nonce from `scpo_refresh_nonce`, and retries once, transparently.
+  - **Stray output from another plugin.** The response was parsed with `res.json()`, so a notice or deprecation printed before the JSON made the parse reject — reporting failure for a write that had already succeeded server-side. Parsing is now tolerant, matching the sorter's `JSON.parse`-in-try/catch, and recovers the payload from anywhere in the body.
+  - **Transient network errors,** which now retry once after 800ms before reporting.
+- **An Order box rendered on rows the user cannot reorder.** `scpo_set_position` has required `edit_post` on the specific row since 2.8.3, but the column is registered off the broad reorder capability, so the two could disagree — most often on a custom post type registered with its own `capability_type` and no `map_meta_cap`, where even administrators fail the meta-cap check. The result was an editable control that rejected every save. `render_order_column()` now checks `current_user_can( 'edit_post', $post_id )` and renders the position as read-only text where the save could not succeed.
+
+### Changed
+- The Order column surfaces the server's own message (`Permission denied.`, `Invalid item.`) and distinguishes an expired session and a connection failure, instead of showing one generic string for every cause. Two new localized strings, `expired` and `network`, join `error` in `scpoOrderCol`.
+
 ## [2.8.5] - 2026-07-27
 
 ### Fixed
