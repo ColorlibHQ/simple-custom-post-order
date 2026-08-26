@@ -4,7 +4,7 @@ Tags: post order, custom post order, sort posts, reorder posts, drag drop order
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 7.1
-Stable tag: 2.8.7
+Stable tag: 2.8.8
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -250,6 +250,16 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 4. Reset order functionality for specific post types
 
 == Changelog ==
+
+= 2.8.8 - 2026-08-26 =
+
+**Bug fixes**
+
+* Fixed the plugin overwriting an order your site already had. Ticking a post type in Settings re-sorted it from scratch — pages alphabetically, everything else newest-first — throwing away the order already stored against your content. For pages that is WordPress's own **Page Attributes → Order** field, so a hand-built page order was lost; it also discarded the order left behind by another sorting plugin you had removed. This happened on *every* settings save, not just the first time. Existing order is now kept, and the alphabetical/newest-first fallback only applies where there is genuinely no order to preserve. Reported by @martinsauter and diagnosed by @jamieburchell.
+* Fixed two items sharing the same order number coming out in a different order depending on whether you had just saved the settings screen or simply opened the list. Both now settle the tie the same way.
+* Fixed dragging a parent page leaving its child pages behind until the page was refreshed. The saved order was always correct — children were re-nested under their parent as soon as the list reloaded — but the screen looked wrong in the meantime. Children now move with their parent as you drag. Reported by @jamieburchell.
+
+Note: full parent/child ordering (keeping a drag within its own level) is still to come.
 
 = 2.8.7 - 2026-08-26 =
 
@@ -566,6 +576,9 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 * Initial release
 
 == Upgrade Notice ==
+
+= 2.8.8 =
+Important fix: enabling a post type (or just re-saving the settings) could overwrite an order your site already had, including WordPress's own page order. Existing order is now preserved. Also fixes dragging a parent page leaving its children behind. Recommended for all users.
 
 = 2.8.7 =
 Fixes drag-and-drop silently doing nothing when items share the same order number, cleans up duplicate order numbers, and removes all leftover options on uninstall. Also clears the Wordfence "Modified Plugin File" warning some sites saw on 2.8.6. Recommended for all users.

@@ -33,6 +33,8 @@
 	var isTaxonomy = !! document.querySelector( 'table.tags #the-list' );
 	var action = isTaxonomy ? 'update-menu-order-tags' : 'update-menu-order';
 
+	var draggedKids = [];   // subtree travelling with the row currently being dragged
+
 	var strings = ( window.scporder_vars && scporder_vars.i18n ) || {};
 	var toast = createToast();
 	var live = createLiveRegion();
@@ -44,6 +46,68 @@
 	// keyboard users can always reach it (it's revealed on focus).
 	if ( window.scporder_vars && scporder_vars.showHandle ) {
 		list.classList.add( 'scpo-handles-visible' );
+	}
+
+	/* ---- Hierarchical lists: keep a row's children with it -------------- */
+
+	/**
+	 * Nesting depth of a row, read from WordPress's `level-N` row class.
+	 * Returns null for a flat list (posts, non-hierarchical CPTs and
+	 * taxonomies), where every helper below is a no-op.
+	 */
+	function rowLevel( row ) {
+		if ( ! row || 'TR' !== row.nodeName ) {
+			return null;
+		}
+		var match = /(?:^|\s)level-(\d+)(?:\s|$)/.exec( row.className );
+		return match ? parseInt( match[ 1 ], 10 ) : null;
+	}
+
+	/**
+	 * The rows nested under `row`: the consecutive following rows at a deeper
+	 * level.
+	 *
+	 * WordPress renders a page tree as one flat run of <tr>s, so moving a
+	 * parent moved only its own row and its children stayed where they were
+	 * until the page was reloaded (reported by @jamieburchell). What was
+	 * *saved* was always right — the list table re-nests children under their
+	 * parent on the next render, and post_parent is never touched — but the
+	 * screen disagreed with it in the meantime. Carrying the subtree along
+	 * makes what you see match what was stored.
+	 */
+	function descendantsOf( row ) {
+		var kids = [];
+		var level = rowLevel( row );
+		if ( null === level ) {
+			return kids;
+		}
+		var next = row.nextElementSibling;
+		while ( next ) {
+			var childLevel = rowLevel( next );
+			if ( null === childLevel || childLevel <= level ) {
+				break;
+			}
+			kids.push( next );
+			next = next.nextElementSibling;
+		}
+		return kids;
+	}
+
+	/** Re-insert `kids` directly after `row`, keeping their relative order. */
+	function reattach( row, kids ) {
+		var anchor = row;
+		for ( var i = 0; i < kids.length; i++ ) {
+			if ( anchor.parentNode ) {
+				anchor.parentNode.insertBefore( kids[ i ], anchor.nextElementSibling );
+			}
+			anchor = kids[ i ];
+		}
+	}
+
+	/** First row after `row`'s whole subtree — where it must return on cancel. */
+	function afterSubtree( row ) {
+		var kids = descendantsOf( row );
+		return kids.length ? kids[ kids.length - 1 ].nextElementSibling : row.nextElementSibling;
 	}
 
 	/* ---- Mouse / touch: SortableJS ------------------------------------- */
@@ -68,11 +132,18 @@
 		// row keeps its column alignment (WP table rows otherwise collapse).
 		onChoose: function ( evt ) {
 			lockRowWidths( evt.item );
+			// Grab the subtree before the drag starts, while it is still
+			// sitting directly beneath the row.
+			draggedKids = descendantsOf( evt.item );
 		},
 		onUnchoose: function ( evt ) {
 			unlockRowWidths( evt.item );
 		},
 		onEnd: function ( evt ) {
+			// Bring the children along before reading the order back out of
+			// the DOM, so the request matches what the user is looking at.
+			reattach( evt.item, draggedKids );
+			draggedKids = [];
 			if ( evt.oldIndex !== evt.newIndex ) {
 				saveOrder();
 			}
@@ -154,7 +225,7 @@
 	function grab( row, handle ) {
 		grabbed = row;
 		grabbedHandle = handle;
-		restoreBefore = row.nextElementSibling;
+		restoreBefore = afterSubtree( row );
 		movedWhileGrabbed = false;
 		handle.setAttribute( 'aria-pressed', 'true' );
 		row.classList.add( 'scpo-grabbed' );
@@ -173,8 +244,10 @@
 
 	function step( mover, row, handle ) {
 		isMoving = true;
+		var kids = descendantsOf( row );
 		var moved = mover( row );
 		if ( moved ) {
+			reattach( row, kids );
 			movedWhileGrabbed = true;
 			handle.focus();
 			row.scrollIntoView( { block: 'nearest' } );
@@ -211,7 +284,9 @@
 
 	function cancel( row ) {
 		isMoving = true;
+		var kids = descendantsOf( row );
 		list.insertBefore( row, restoreBefore ); // back to where it started
+		reattach( row, kids );
 		isMoving = false;
 		var pos = positionOf( row );
 		var title = rowTitle( row );

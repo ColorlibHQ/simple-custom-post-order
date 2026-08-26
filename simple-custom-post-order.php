@@ -3,7 +3,7 @@
  * Plugin Name: Simple Custom Post Order
  * Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
  * Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
- * Version: 2.8.7
+ * Version: 2.8.8
  * Author: Colorlib
  * Author URI: https://colorlib.com/
  * Tested up to: 7.1
@@ -36,7 +36,7 @@
 
 define( 'SCPORDER_URL', plugins_url( '', __FILE__ ) );
 define( 'SCPORDER_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SCPORDER_VERSION', '2.8.7' );
+define( 'SCPORDER_VERSION', '2.8.8' );
 
 $scporder = new SCPO_Engine();
 
@@ -1139,10 +1139,31 @@ class SCPO_Engine {
 					continue;
 				}
 
-				// Seed order for a freshly enabled type: pages alphabetically,
-				// everything else newest-first. The secondary ID sort keeps the
-				// result deterministic when the primary key ties.
-				$seed_order = ( 'page' === $object ) ? 'post_title ASC, ID ASC' : 'post_date DESC, ID DESC';
+				// Seeding must not destroy an order the site already has.
+				//
+				// Ordering on title/date alone silently alphabetised every page on
+				// the site the moment Pages was ticked in Settings — and did it
+				// again on *every* later settings save, since this loop runs for
+				// all enabled types, not just newly enabled ones. `menu_order` is
+				// WordPress's own Page Attributes → Order field, so this discarded
+				// a hand-built page order, and equally the values another sorting
+				// plugin left behind when it was removed. Reported by @martinsauter
+				// ("destroying any existing order") and diagnosed by @jamieburchell.
+				//
+				// So: seed from scratch only when there is genuinely nothing to
+				// preserve — every row sharing a single value, which is what an
+				// untouched site looks like (all zeros). Otherwise follow the
+				// existing sequence, breaking ties on ID exactly as refresh() does.
+				// Both paths renumber the same rows, and a site hits whichever runs
+				// first, so they have to agree: tie-breaking one on title and the
+				// other on ID is how an order appears to change on its own.
+				$has_existing_order = ( isset( $result[0]->distinct_cnt ) && (int) $result[0]->distinct_cnt > 1 );
+
+				if ( $has_existing_order ) {
+					$seed_order = 'menu_order ASC, ID ASC';
+				} else {
+					$seed_order = ( 'page' === $object ) ? 'post_title ASC, ID ASC' : 'post_date DESC, ID DESC';
+				}
 
 				$ordered_ids = $wpdb->get_col(
 					// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- generated %s list plus a hard-coded ORDER BY literal; values bound below.
@@ -1180,13 +1201,21 @@ class SCPO_Engine {
 					continue;
 				}
 
+				// Same rule as posts above: preserve an existing term_order, and
+				// fall back to name only where every term shares one value.
+				$has_existing_order = ( isset( $result[0]->distinct_cnt ) && (int) $result[0]->distinct_cnt > 1 );
+				$seed_order         = $has_existing_order
+					? 'terms.term_order ASC, terms.term_id ASC'
+					: 'terms.name ASC, terms.term_id ASC';
+
 				$ordered_ids = $wpdb->get_col(
+					// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $seed_order is one of two hard-coded literals.
 					$wpdb->prepare(
 						"SELECT terms.term_id
 						FROM $wpdb->terms AS terms
 						INNER JOIN $wpdb->term_taxonomy AS term_taxonomy ON ( terms.term_id = term_taxonomy.term_id )
 						WHERE term_taxonomy.taxonomy = %s
-						ORDER BY name ASC",
+						ORDER BY $seed_order",
 						$taxonomy
 					)
 				);
