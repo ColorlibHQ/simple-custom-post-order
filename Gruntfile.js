@@ -48,7 +48,7 @@ module.exports = function(grunt) {
                   include: [],                      // List of files or directories to include.
                   mainFile: 'simple-custom-post-order.php',                     // Main project file.
                   potComments: '',                  // The copyright at the beginning of the POT file.
-                  potFilename: 'simple-custom-post-order.po',                  // Name of the POT file.
+                  potFilename: 'simple-custom-post-order.pot',                 // Name of the POT file. (Was '.po', so `grunt i18n` regenerated a mislabelled template and left the real .pot stale — it sat at v2.7.0 while the plugin reached 2.8.6.)
                   potHeaders: {
                       poedit: true,                 // Includes common Poedit headers.
                       'x-poedit-keywordslist': true // Include a list of all possible gettext functions.

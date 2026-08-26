@@ -3,8 +3,8 @@ Contributors: silkalns
 Tags: post order, custom post order, sort posts, reorder posts, drag drop order
 Requires at least: 6.2
 Requires PHP: 7.4
-Tested up to: 7.0
-Stable tag: 2.8.6
+Tested up to: 7.1
+Stable tag: 2.8.7
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -250,6 +250,21 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 4. Reset order functionality for specific post types
 
 == Changelog ==
+
+= 2.8.7 - 2026-08-26 =
+
+**Bug fixes**
+
+* Fixed drag-and-drop appearing to do nothing when two or more items shared the same order number. The reorder saved successfully but the items never moved, and because they stayed tied, which one came first was a toss-up on the front end. Reported by @literayz.
+* Fixed duplicate order numbers never getting cleaned up. The plugin's tidy-up step checked the count, highest and lowest number, so a list with a duplicate *and* a matching gap (1, 2, 2, 4, 5) looked correct and was skipped every time. Duplicates are now detected and renumbered.
+* Fixed items in a custom status (added by editorial-workflow and similar plugins) being left out of ordering. They still appeared in the list and could still be dragged, but were skipped when the plugin numbered everything else — which is a common way duplicate numbers appeared in the first place. Ordering now covers every status shown in the list's "All" view. On a site without such plugins nothing changes.
+* Fixed leftover settings after uninstalling. Three options survived removal and were silently restored if the plugin was installed again later. Everything the plugin creates is now removed. Reported by @jamieburchell.
+* Fixed the plugin's review notice never being displayed, due to the way it was hooked into WordPress. Also spotted by @jamieburchell.
+
+**Housekeeping**
+
+* Marked compatible with WordPress 7.1. The previous release's compatibility line was edited directly in the published 2.8.6 files rather than shipped as an update, which made security scanners such as Wordfence report the plugin as a **Modified Plugin File** on sites that had already installed 2.8.6. Nothing was wrong with those sites — the only difference was that single line — and updating to 2.8.7 clears the warning. Reported by @timwakeling-1.
+* The review notice no longer loads jQuery, no longer appears on every site at once after this update (sites that already dismissed it stay dismissed), and no longer risks garbled text in translated languages.
 
 = 2.8.6 - 2026-07-27 =
 
@@ -551,6 +566,9 @@ Yes, if you explicitly set `orderby` and `order` parameters in your custom queri
 * Initial release
 
 == Upgrade Notice ==
+
+= 2.8.7 =
+Fixes drag-and-drop silently doing nothing when items share the same order number, cleans up duplicate order numbers, and removes all leftover options on uninstall. Also clears the Wordfence "Modified Plugin File" warning some sites saw on 2.8.6. Recommended for all users.
 
 = 2.8.6 =
 Fixes "Couldn't update the order" errors in the numeric Order column: expired sessions now recover automatically, stray output from other plugins no longer looks like a failure, and errors finally say what actually went wrong. Recommended if you use the Order column.

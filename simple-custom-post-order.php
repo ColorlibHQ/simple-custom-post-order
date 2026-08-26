@@ -3,10 +3,10 @@
  * Plugin Name: Simple Custom Post Order
  * Plugin URI: https://wordpress.org/plugins-wp/simple-custom-post-order/
  * Description: Order Items (Posts, Pages, and Custom Post Types) using a Drag and Drop Sortable JavaScript.
- * Version: 2.8.6
+ * Version: 2.8.7
  * Author: Colorlib
  * Author URI: https://colorlib.com/
- * Tested up to: 7.0
+ * Tested up to: 7.1
  * Requires: 6.2 or higher
  * License: GPLv3 or later
  * License URI: http://www.gnu.org/licenses/gpl-3.0.html
@@ -36,7 +36,7 @@
 
 define( 'SCPORDER_URL', plugins_url( '', __FILE__ ) );
 define( 'SCPORDER_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SCPORDER_VERSION', '2.8.6' );
+define( 'SCPORDER_VERSION', '2.8.7' );
 
 $scporder = new SCPO_Engine();
 
@@ -91,7 +91,9 @@ class SCPO_Engine {
 	}
 
 	public function load_dependencies(): void {
-		include SCPORDER_DIR . 'class-simple-review.php';
+		// include_once: the file instantiates Simple_Review at the bottom, so a
+		// second include would redeclare the class and fatal.
+		include_once SCPORDER_DIR . 'class-simple-review.php';
 	}
 
 	/**
@@ -404,14 +406,18 @@ class SCPO_Engine {
 
 		if ( ! empty( $objects ) ) {
 
+			$statuses     = $this->order_post_statuses();
+			$placeholders = $this->order_post_statuses_placeholders();
+
 			foreach ( $objects as $object ) {
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $placeholders is a generated %s list; the statuses are bound below.
 				$query = $wpdb->prepare(
 					"
-					SELECT COUNT(*) AS cnt, MAX(menu_order) AS max, MIN(menu_order) AS min
+					SELECT COUNT(*) AS cnt, COUNT(DISTINCT menu_order) AS distinct_cnt, MAX(menu_order) AS max, MIN(menu_order) AS min
 					FROM $wpdb->posts
-					WHERE post_type = %s AND post_status IN ('publish', 'pending', 'draft', 'private', 'future')
+					WHERE post_type = %s AND post_status IN ($placeholders)
 					",
-					$object
+					array_merge( [ $object ], $statuses )
 				);
 
 				$result = $wpdb->get_results( $query );
@@ -428,11 +434,12 @@ class SCPO_Engine {
 				// order (PR #147 / issue #119).
 				$object      = sanitize_key( $object );
 				$ordered_ids = $wpdb->get_col(
+					// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- generated %s list, values bound below.
 					$wpdb->prepare(
 						"SELECT ID FROM $wpdb->posts
-						WHERE post_type = %s AND post_status IN ( 'publish', 'pending', 'draft', 'private', 'future' )
-						ORDER BY menu_order ASC",
-						$object
+						WHERE post_type = %s AND post_status IN ($placeholders)
+						ORDER BY menu_order ASC, ID ASC",
+						array_merge( [ $object ], $statuses )
 					)
 				);
 				$this->renumber_rows( $wpdb->posts, 'ID', 'menu_order', $ordered_ids );
@@ -444,7 +451,7 @@ class SCPO_Engine {
 			foreach ( $tags as $taxonomy ) {
 				$query = $wpdb->prepare(
 					"
-					SELECT COUNT(*) AS cnt, MAX(term_order) AS max, MIN(term_order) AS min
+					SELECT COUNT(*) AS cnt, COUNT(DISTINCT term_order) AS distinct_cnt, MAX(term_order) AS max, MIN(term_order) AS min
 					FROM $wpdb->terms AS terms
 					INNER JOIN $wpdb->term_taxonomy AS term_taxonomy ON ( terms.term_id = term_taxonomy.term_id )
 					WHERE term_taxonomy.taxonomy = %s
@@ -463,7 +470,7 @@ class SCPO_Engine {
 						FROM $wpdb->terms AS terms
 						INNER JOIN $wpdb->term_taxonomy AS term_taxonomy ON ( terms.term_id = term_taxonomy.term_id )
 						WHERE term_taxonomy.taxonomy = %s
-						ORDER BY term_order ASC
+						ORDER BY term_order ASC, terms.term_id ASC
 						",
 						$taxonomy
 					)
@@ -475,16 +482,30 @@ class SCPO_Engine {
 
 	/**
 	 * Whether an order column is already a gapless 1..N sequence, judged from the
-	 * COUNT/MAX/MIN probe its callers run before deciding to renumber.
+	 * COUNT/DISTINCT/MAX/MIN probe its callers run before deciding to renumber.
 	 *
-	 * Both `MAX === COUNT` and `MIN === 1` have to hold. The previous check
-	 * tested MAX alone, so a set like {-1, 2, 3, 4, 5} (COUNT 5, MAX 5) read as
-	 * clean and skipped renumbering. That became reachable once top placement
-	 * started writing a value below the current minimum instead of shifting every
-	 * other row, and would have left a negative number showing in the Order
-	 * column. Ordering itself was never affected — reads sort on the raw value.
+	 * All three of `MAX === COUNT`, `MIN === 1` and `COUNT(DISTINCT) === COUNT`
+	 * have to hold.
 	 *
-	 * @param object|null $probe Row exposing cnt / max / min.
+	 * History of this check, because each miss left real rows unrepaired:
+	 *  - MAX alone: a set like {-1, 2, 3, 4, 5} (COUNT 5, MAX 5) read as clean.
+	 *    Reachable once top placement started writing below the current minimum,
+	 *    and left a negative number showing in the Order column. Fixed in 2.8.5
+	 *    by also requiring MIN === 1.
+	 *  - MAX + MIN: a set with a duplicate and a compensating gap, e.g.
+	 *    {1, 2, 2, 4, 5}, still passes — COUNT 5, MAX 5, MIN 1. Duplicates arise
+	 *    from imports, direct SQL, and (until 2.8.7) any row in a post status
+	 *    this plugin's renumber query did not select. They were never repaired,
+	 *    and because the drag handler reassigns the *existing* set of values
+	 *    positionally, two rows sharing a number made dragging them a literal
+	 *    no-op — the reorder saved successfully and changed nothing (reported by
+	 *    @literayz). Fixed in 2.8.7 by requiring the values to be distinct.
+	 *
+	 * Ordering itself is never affected by gaps — reads sort on the raw value —
+	 * but duplicates genuinely are: two rows with the same number sort
+	 * unpredictably against each other.
+	 *
+	 * @param object|null $probe Row exposing cnt / distinct_cnt / max / min.
 	 * @return bool True when there is nothing to renumber.
 	 */
 	private function is_already_sequential( $probe ): bool {
@@ -494,7 +515,57 @@ class SCPO_Engine {
 
 		$count = (int) $probe->cnt;
 
-		return 0 === $count || ( $count === (int) $probe->max && 1 === (int) $probe->min );
+		if ( 0 === $count ) {
+			return true;
+		}
+
+		// COUNT(DISTINCT col) skips NULLs, so an all-NULL term_order column
+		// (the column is `INT NULL DEFAULT 0`) reports 0 here and is renumbered.
+		if ( isset( $probe->distinct_cnt ) && (int) $probe->distinct_cnt !== $count ) {
+			return false;
+		}
+
+		return $count === (int) $probe->max && 1 === (int) $probe->min;
+	}
+
+	/**
+	 * Post statuses whose rows take part in ordering.
+	 *
+	 * These are exactly the statuses WordPress shows in a list table's "All"
+	 * view, so the set of rows this plugin renumbers matches the set of rows the
+	 * user can actually see and drag.
+	 *
+	 * Until 2.8.7 the five built-in statuses were hard-coded. Any row in a
+	 * custom status registered by another plugin (editorial workflows, "archived",
+	 * WooCommerce-style statuses) was therefore excluded from both the
+	 * COUNT/MAX/MIN probe and the renumber, yet still rendered in the list — so
+	 * it kept whatever `menu_order` it had (usually 0) while its neighbours were
+	 * renumbered from 1, producing permanent duplicates that no amount of
+	 * dragging could resolve. `show_in_admin_all_list` resolves to the same five
+	 * statuses on a stock site, so this is purely additive.
+	 *
+	 * @return string[]
+	 */
+	private function order_post_statuses(): array {
+		$statuses = get_post_stati( [ 'show_in_admin_all_list' => true ] );
+
+		if ( empty( $statuses ) ) {
+			return [ 'publish', 'pending', 'draft', 'private', 'future' ];
+		}
+
+		return array_values( $statuses );
+	}
+
+	/**
+	 * `%s` placeholder list for order_post_statuses(), for use inside an IN ().
+	 *
+	 * The statuses themselves are still bound through $wpdb->prepare() by the
+	 * caller — only the placeholder string is interpolated.
+	 *
+	 * @return string
+	 */
+	private function order_post_statuses_placeholders(): string {
+		return implode( ', ', array_fill( 0, count( $this->order_post_statuses() ), '%s' ) );
 	}
 
 	/**
@@ -687,6 +758,25 @@ class SCPO_Engine {
 
 		sort( $menu_order_arr );
 
+		// Reordering reuses the *existing* set of menu_order values and reassigns
+		// them positionally, which keeps rows on other pages of a paginated list
+		// untouched. That only works while the values are distinct: if two of the
+		// dragged rows share a number, sorting and re-dealing the same multiset
+		// writes back exactly what each row already had, so the save succeeded and
+		// the order never moved — the "menu order is not updating when I drag and
+		// drop" report (@literayz). Force the reused set to strictly increase so
+		// every position gets its own value. refresh() normalises the whole type
+		// back to a gapless 1..N the next time the list screen renders, so any
+		// number pushed past a neighbour outside this page is short-lived.
+		$previous = null;
+		foreach ( $menu_order_arr as $i => $value ) {
+			if ( null !== $previous && $value <= $previous ) {
+				$value                = $previous + 1;
+				$menu_order_arr[ $i ] = $value;
+			}
+			$previous = $value;
+		}
+
 		// Update posts and collect IDs for cache invalidation
 		$updated_ids = [];
 		$position = 0;
@@ -771,6 +861,25 @@ class SCPO_Engine {
 		}
 
 		sort( $term_order_arr );
+
+		// Reordering reuses the *existing* set of term_order values and reassigns
+		// them positionally, which keeps rows on other pages of a paginated list
+		// untouched. That only works while the values are distinct: if two of the
+		// dragged rows share a number, sorting and re-dealing the same multiset
+		// writes back exactly what each row already had, so the save succeeded and
+		// the order never moved — the "menu order is not updating when I drag and
+		// drop" report (@literayz). Force the reused set to strictly increase so
+		// every position gets its own value. refresh() normalises the whole type
+		// back to a gapless 1..N the next time the list screen renders, so any
+		// number pushed past a neighbour outside this page is short-lived.
+		$previous = null;
+		foreach ( $term_order_arr as $i => $value ) {
+			if ( null !== $previous && $value <= $previous ) {
+				$value                = $previous + 1;
+				$term_order_arr[ $i ] = $value;
+			}
+			$previous = $value;
+		}
 
 		// Update terms and collect IDs for cache invalidation
 		$updated_ids = [];
@@ -1011,14 +1120,18 @@ class SCPO_Engine {
 
 		// Initialize menu_order for newly enabled post types
 		if ( ! empty( $sanitized['objects'] ) ) {
+			$statuses     = $this->order_post_statuses();
+			$placeholders = $this->order_post_statuses_placeholders();
+
 			foreach ( $sanitized['objects'] as $object ) {
 				$object = sanitize_key( $object );
 				$result = $wpdb->get_results(
+					// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- generated %s list, values bound below.
 					$wpdb->prepare(
-						"SELECT count(*) as cnt, max(menu_order) as max, min(menu_order) as min
+						"SELECT count(*) as cnt, count(DISTINCT menu_order) as distinct_cnt, max(menu_order) as max, min(menu_order) as min
 						FROM $wpdb->posts
-						WHERE post_type = %s AND post_status IN ('publish', 'pending', 'draft', 'private', 'future')",
-						$object
+						WHERE post_type = %s AND post_status IN ($placeholders)",
+						array_merge( [ $object ], $statuses )
 					)
 				);
 
@@ -1026,25 +1139,20 @@ class SCPO_Engine {
 					continue;
 				}
 
-				if ( 'page' === $object ) {
-					$ordered_ids = $wpdb->get_col(
-						$wpdb->prepare(
-							"SELECT ID FROM $wpdb->posts
-							WHERE post_type = %s AND post_status IN ('publish', 'pending', 'draft', 'private', 'future')
-							ORDER BY post_title ASC",
-							$object
-						)
-					);
-				} else {
-					$ordered_ids = $wpdb->get_col(
-						$wpdb->prepare(
-							"SELECT ID FROM $wpdb->posts
-							WHERE post_type = %s AND post_status IN ('publish', 'pending', 'draft', 'private', 'future')
-							ORDER BY post_date DESC",
-							$object
-						)
-					);
-				}
+				// Seed order for a freshly enabled type: pages alphabetically,
+				// everything else newest-first. The secondary ID sort keeps the
+				// result deterministic when the primary key ties.
+				$seed_order = ( 'page' === $object ) ? 'post_title ASC, ID ASC' : 'post_date DESC, ID DESC';
+
+				$ordered_ids = $wpdb->get_col(
+					// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- generated %s list plus a hard-coded ORDER BY literal; values bound below.
+					$wpdb->prepare(
+						"SELECT ID FROM $wpdb->posts
+						WHERE post_type = %s AND post_status IN ($placeholders)
+						ORDER BY $seed_order",
+						array_merge( [ $object ], $statuses )
+					)
+				);
 
 				// Seeding used to run one UPDATE per row with no cache invalidation
 				// at all. renumber_rows() batches the write and busts the object
@@ -1060,7 +1168,7 @@ class SCPO_Engine {
 				$taxonomy = sanitize_key( $taxonomy );
 				$result   = $wpdb->get_results(
 					$wpdb->prepare(
-						"SELECT count(*) as cnt, max(term_order) as max, min(term_order) as min
+						"SELECT count(*) as cnt, count(DISTINCT term_order) as distinct_cnt, max(term_order) as max, min(term_order) as min
 						FROM $wpdb->terms AS terms
 						INNER JOIN $wpdb->term_taxonomy AS term_taxonomy ON ( terms.term_id = term_taxonomy.term_id )
 						WHERE term_taxonomy.taxonomy = %s",
@@ -1483,12 +1591,14 @@ class SCPO_Engine {
 
 		// $aggregate is one of two hard-coded literals, never user input; every
 		// value in the statement is still bound through prepare().
-		$aggregate = $to_top ? 'MIN' : 'MAX';
-		$sql       = "SELECT $aggregate(menu_order) FROM $wpdb->posts
-			WHERE post_type = %s AND ID <> %d AND post_status IN ('publish','pending','draft','private','future')";
+		$aggregate    = $to_top ? 'MIN' : 'MAX';
+		$statuses     = $this->order_post_statuses();
+		$placeholders = $this->order_post_statuses_placeholders();
+		$sql          = "SELECT $aggregate(menu_order) FROM $wpdb->posts
+			WHERE post_type = %s AND ID <> %d AND post_status IN ($placeholders)";
 
 		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$boundary = $wpdb->get_var( $wpdb->prepare( $sql, $post->post_type, $post_id ) );
+		$boundary = $wpdb->get_var( $wpdb->prepare( $sql, array_merge( [ $post->post_type, $post_id ], $statuses ) ) );
 
 		if ( null === $boundary ) {
 			$menu_order = 1; // No siblings yet — first item of the type starts the sequence.
@@ -1623,14 +1733,17 @@ class SCPO_Engine {
 		}
 
 		global $wpdb;
-		$ids = array_map(
+		$statuses     = $this->order_post_statuses();
+		$placeholders = $this->order_post_statuses_placeholders();
+		$ids          = array_map(
 			'intval',
 			$wpdb->get_col(
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- generated %s list, values bound below.
 				$wpdb->prepare(
 					"SELECT ID FROM $wpdb->posts
-					WHERE post_type = %s AND post_status IN ('publish','pending','draft','private','future')
+					WHERE post_type = %s AND post_status IN ($placeholders)
 					ORDER BY menu_order ASC, post_date DESC",
-					$post->post_type
+					array_merge( [ $post->post_type ], $statuses )
 				)
 			)
 		);
@@ -2046,6 +2159,14 @@ function scporder_uninstall_db(): void {
 	if ( $result ) {
 		$wpdb->query( "ALTER TABLE $wpdb->terms DROP `term_order`" );
 	}
-	delete_option( 'scporder_install' );
+
+	// Every option this plugin ever writes, including the one owned by the
+	// bundled Simple_Review nag. Before 2.8.7 only `scporder_install` was
+	// removed, so `scporder_notice`, `scporder_options` and `simple-rate-time`
+	// survived an uninstall and were silently restored on a later reinstall
+	// (reported by @jamieburchell).
+	foreach ( array( 'scporder_install', 'scporder_notice', 'scporder_options', 'simple-rate-time' ) as $option ) {
+		delete_option( $option );
+	}
 }
 
