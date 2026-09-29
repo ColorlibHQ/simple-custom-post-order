@@ -1,6 +1,21 @@
 (function ($) {
+    // Defined before the .sortable() calls below read it — as a `var` assigned
+    // afterwards it was still undefined there, so no helper was used and the
+    // dragged row's cells collapsed. Pins each cell (<td>/<th>) to its width.
+    var fixHelper = function (e, ui) {
+        ui.children().each(function () {
+            $(this).width($(this).width());
+        });
+        return ui;
+    };
+
+    // Only real item rows. A plain 'tr' also matched an open Quick Edit row
+    // (id "edit-N") and the Bulk Edit row (serialized as bulk[]=edit → ID 0),
+    // which made the server reject the whole save with a 403.
+    var items = 'tr:not(.inline-edit-row):not(.no-items):not(#bulk-edit)';
+
     $('table.posts #the-list, table.pages #the-list').sortable({
-        'items': 'tr',
+        'items': items,
         'axis': 'y',
         'helper': fixHelper,
         'update': function (e, ui) {
@@ -12,7 +27,7 @@
         }
     });
     $('table.tags #the-list').sortable({
-        'items': 'tr',
+        'items': items,
         'axis': 'y',
         'helper': fixHelper,
         'update': function (e, ui) {
@@ -23,12 +38,6 @@
             });
         }
     });
-    var fixHelper = function (e, ui) {
-        ui.children().children().each(function () {
-            $(this).width($(this).width());
-        });
-        return ui;
-    };
 
     /****
      * Fix for table breaking

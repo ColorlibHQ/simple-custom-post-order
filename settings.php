@@ -12,7 +12,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-$options = get_option( 'scporder_options', [] );
 ?>
 <div class="wrap">
 	<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
@@ -31,6 +30,7 @@ $options = get_option( 'scporder_options', [] );
 
 	<h2><?php esc_html_e( 'Reset Post Order', 'simple-custom-post-order' ); ?></h2>
 	<p><?php esc_html_e( 'Select post types to reset their custom order back to default (by date for posts, alphabetical for pages).', 'simple-custom-post-order' ); ?></p>
+	<p class="description"><?php esc_html_e( 'This sets the order number of every item of the selected types to 0 — including any values entered under Page Attributes → Order — and turns sorting off for those types. It cannot be undone.', 'simple-custom-post-order' ); ?></p>
 
 	<form id="scpo-reset-form">
 		<table class="form-table" role="presentation">
@@ -41,18 +41,10 @@ $options = get_option( 'scporder_options', [] );
 						<fieldset>
 							<legend class="screen-reader-text"><span><?php esc_html_e( 'Post Types to Reset', 'simple-custom-post-order' ); ?></span></legend>
 							<?php
-							$post_types_args = apply_filters(
-								'scpo_post_types_args',
-								[
-									'show_ui'      => true,
-									'show_in_menu' => true,
-								],
-								$options
-							);
-							$post_types = get_post_types( $post_types_args, 'objects' );
-
-							foreach ( $post_types as $post_type ) {
-								if ( 'attachment' === $post_type->name ) {
+							// $this is the SCPO_Engine instance — this file is included from admin_page().
+							foreach ( $this->resettable_post_types() as $post_type_name ) {
+								$post_type = get_post_type_object( $post_type_name );
+								if ( ! $post_type ) {
 									continue;
 								}
 								printf(
@@ -67,8 +59,6 @@ $options = get_option( 'scporder_options', [] );
 				</tr>
 			</tbody>
 		</table>
-
-		<?php wp_nonce_field( 'scpo-reset-order', 'scpo_reset_nonce' ); ?>
 
 		<p class="submit">
 			<button type="submit" id="scpo-reset-button" class="button button-secondary">
@@ -86,8 +76,8 @@ $options = get_option( 'scporder_options', [] );
 		printf(
 			/* translators: 1: link to reviews, 2: link to Colorlib */
 			esc_html__( 'Enjoying this plugin? Please %1$s on WordPress.org! For support, visit %2$s.', 'simple-custom-post-order' ),
-			'<a href="https://wordpress.org/support/plugin/simple-custom-post-order/reviews/?filter=5" target="_blank">' . esc_html__( 'leave a review', 'simple-custom-post-order' ) . '</a>',
-			'<a href="https://colorlib.com/" target="_blank">Colorlib.com</a>'
+			'<a href="https://wordpress.org/support/plugin/simple-custom-post-order/reviews/" target="_blank" rel="noopener noreferrer">' . esc_html__( 'leave a review', 'simple-custom-post-order' ) . '</a>',
+			'<a href="https://colorlib.com/" target="_blank" rel="noopener noreferrer">Colorlib.com</a>'
 		);
 		?>
 	</p>
@@ -119,7 +109,8 @@ $options = get_option( 'scporder_options', [] );
 		$message.text('<?php echo esc_js( __( 'Resetting...', 'simple-custom-post-order' ) ); ?>');
 
 		$.ajax({
-			url: '<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>',
+			// Root-relative, so the request stays same-origin on any host/port/scheme.
+			url: <?php echo wp_json_encode( $this->get_ajax_url() ); ?>,
 			type: 'POST',
 			data: {
 				action: 'scpo_reset_order',

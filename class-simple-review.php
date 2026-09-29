@@ -5,8 +5,17 @@
  * Independent of SCPO_Engine. Kept on the legacy `epsilon_simple_review` AJAX
  * action and `simple-rate-time` option so existing installs carry their state
  * forward untouched.
+ *
+ * The class was called `Simple_Review` until 2.8.9. That generic, unprefixed
+ * name is shared by other plugins built on the same Epsilon framework, and
+ * declaring it twice is a fatal error.
  */
-class Simple_Review {
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+class SCPO_Review_Notice {
 
 	/**
 	 * @var int Timestamp after which the review notice may be shown.
@@ -245,4 +254,4 @@ class Simple_Review {
 	}
 }
 
-new Simple_Review();
+new SCPO_Review_Notice();

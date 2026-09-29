@@ -4,7 +4,7 @@ Tags: post order, custom post order, sort posts, reorder posts, drag drop order
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 7.1
-Stable tag: 2.8.8
+Stable tag: 2.8.9
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -16,13 +16,13 @@ Easily reorder posts, pages, custom post types, and taxonomies with intuitive dr
 
 = Why Choose Simple Custom Post Order? =
 
-* **Zero Configuration** - Works instantly after activation
+* **Quick Setup** - Tick the post types and taxonomies to sort under Settings > SCPOrder, then drag
 * **Drag & Drop Interface** - Intuitive sorting directly in your admin post lists
 * **Universal Compatibility** - Works with any post type and taxonomy
 * **Lightweight & Fast** - No bloat, minimal impact on site performance
 * **Modern & Dependency-Free** - Vanilla JavaScript drag-and-drop (no jQuery UI) with touch and full keyboard support
 * **Reliable Saving** - Robust AJAX saving that works behind reverse proxies, custom ports, and HTTPS setups
-* **Developer Friendly** - Clean code with action hooks for customization
+* **Developer Friendly** - Action and filter hooks for customization
 
 = Key Features =
 
@@ -40,15 +40,20 @@ Easily reorder posts, pages, custom post types, and taxonomies with intuitive dr
 * Touch-friendly — press, hold, and drag to reorder on phones and tablets
 * Fully keyboard accessible — tab to a row, then use Space and the arrow keys to reorder, with screen-reader announcements
 * Clear save feedback — a "Saving… / Order saved" status appears as you sort
-* Optional drag handle — show a grip icon on hover, or keep rows draggable from anywhere
-* Changes saved automatically via AJAX - no page refresh needed
+* Drag handle — a grip icon appears on hover (on by default; can be turned off), and rows stay draggable from anywhere
+* Page trees — dragging a parent page carries its child pages with it, and keyboard moves stay among a page's siblings
+* Optional "Order" column — type an exact position, handy for moving an item to another page of a long list
+* Choose whether newly created items go to the top (default) or the bottom of the order
+* Choose which user roles may reorder
+* Changes saved automatically via AJAX - no page refresh needed, with a Retry button if a save fails
 * Works seamlessly with the default WordPress admin experience
 
 **Smart Query Integration**
 
-* Automatically applies custom order to front-end queries
-* Respects custom `orderby` parameters when explicitly set
+* Automatically applies the custom order to queries for enabled post types that don't ask for a specific order
+* Respects an explicit sort such as `orderby => title` (see the FAQ for the one `get_posts()` exception)
 * Does not interfere with search results (maintains relevance sorting)
+* Previous/next post links follow the custom order
 * Compatible with `get_posts()`, `WP_Query`, and standard loops
 
 **Reset & Restore**
@@ -92,14 +97,20 @@ Show your most compelling testimonials first to maximize their impact on potenti
 
 **Action Hooks**
 
-* `scp_update_menu_order` - Fires after post order is updated
-* `scp_update_menu_order_tags` - Fires after taxonomy term order is updated
+* `scp_update_menu_order` - Fires after post order is updated, by drag-and-drop or the Order column (no arguments)
+* `scp_update_menu_order_tags` - Fires after taxonomy term order is updated (no arguments)
 
 **Filter Hooks**
 
 * `scpo_post_types_args` - Modify which post types appear in settings
 * `scpo_use_sortablejs` - Force the drag engine in code (overrides the setting); return `true` for the modern SortableJS engine or `false` for the classic jQuery UI sorter
 * `scpo_capability` - Change the capability required to reorder (default `edit_posts`)
+* `scpo_reverse_adjacent_posts` - Return `true` to swap the direction of previous/next post links
+* `scpo_cache_flush_group_threshold` - Number of changed rows (default 500) above which cached order values are cleared in bulk instead of one by one
+
+Example — let only editors and administrators reorder:
+
+`add_filter( 'scpo_capability', function () { return 'edit_others_posts'; } );`
 
 **Drag & Drop Engine**
 Choose between the modern, dependency-free SortableJS engine (default) and the classic jQuery UI sorter under Settings > SCPOrder. The classic engine remains fully supported as a fallback.
@@ -120,7 +131,7 @@ Simple Custom Post Order works with:
 * Testimonial post types
 * Event post types (The Events Calendar, etc.)
 * FAQ post types
-* Any custom post type with `show_ui` enabled
+* Any custom post type with `show_ui` enabled that appears in the admin menu (turn on Advanced View in Settings to list the rest)
 
 = Supported Taxonomies =
 
@@ -133,16 +144,16 @@ Simple Custom Post Order works with:
 = How It Works =
 
 1. **Install & Activate** - Install the plugin from WordPress.org or upload manually
-2. **Configure** - Go to Settings > SCPOrder and select which post types and taxonomies to enable
+2. **Configure** - Go to Settings > SCPOrder and select which post types and taxonomies to enable (nothing is sorted until you do)
 3. **Reorder** - Visit any enabled post type list and drag items to reorder
-4. **Done** - Your custom order is automatically applied everywhere on your site
+4. **Done** - Your custom order is automatically applied across your site
 
 The plugin uses WordPress's native `menu_order` field for posts and pages, and adds a `term_order` column for taxonomy terms. This approach ensures compatibility and data persistence.
 
 = Performance Optimized =
 
 * Targeted cache invalidation (only clears cache for modified items)
-* Efficient database queries using prepared statements
+* Batched database writes that only touch rows whose order actually changed
 * Scripts loaded only on relevant admin pages
 * No front-end performance impact
 
@@ -177,7 +188,7 @@ The plugin uses WordPress's native `menu_order` field for posts and pages, and a
 1. Navigate to Settings > SCPOrder
 2. Check the boxes next to post types you want to enable sorting for
 3. Check the boxes next to taxonomies you want to enable sorting for
-4. Click "Update" to save your settings
+4. Click "Save Changes"
 5. Visit any enabled post type list to start reordering with drag-and-drop
 
 == Frequently Asked Questions ==
@@ -196,7 +207,9 @@ Yes, as long as the page builder uses standard WordPress queries, your custom or
 
 = Can I reset the order back to default? =
 
-Yes! Go to Settings > SCPOrder and use the "Reset Order" section at the bottom of the page. Select the post types you want to reset and click "Reset order". This will clear the custom ordering for selected post types.
+Yes. Go to Settings > SCPOrder and use the "Reset Post Order" section at the bottom of the page. Select the post types you want to reset and click "Reset Order".
+
+Be aware that this sets the order number of *every* item of those types back to 0 — including values typed into Page Attributes > Order and WooCommerce's own product order — and turns sorting off for those types. It cannot be undone. Taxonomies cannot be reset from here.
 
 = Does it affect search results? =
 
@@ -240,16 +253,84 @@ Yes. As of 2.7.0 the save request is always sent same-origin, which fixes silent
 
 = Can I programmatically override the custom order? =
 
-Yes, if you explicitly set `orderby` and `order` parameters in your custom queries, those will take precedence over the plugin's custom order.
+Yes. With `WP_Query`, a query for an enabled post type that sets its own `orderby` (for example `'orderby' => 'title', 'order' => 'DESC'`) keeps it. A query without an `orderby` gets the custom order.
+
+`get_posts()` is different: it fills in `orderby => date, order => DESC` before the plugin sees the query, so the plugin can't tell what you actually asked for. It gives the default date sort the custom order and, for compatibility, turns a descending sort ascending — except on the date columns `post_date`, `modified` and `post_modified`. So to get the newest items first with `get_posts()`, use `'orderby' => 'post_date'`; for any other descending sort, use `WP_Query`.
+
+For taxonomy terms, `get_terms()` and similar calls get the custom order for the usual sorts (name, slug, ID, WooCommerce's category order). Sorts that mean something else are respected: `count`, `include`, `slug__in`, `name__in`, `parent`, `term_taxonomy_id`, meta values and `none`. Clicking a column heading in the admin always wins.
+
+= How do I show previous/next links that follow my custom order? =
+
+WordPress's own previous/next functions already follow the custom order for every enabled post type, pages included. Many themes only print those links on blog posts, though. In a block theme, add the Previous Post and Next Post blocks to the relevant template (Appearance > Editor > Templates). In a classic theme, call `the_post_navigation()` in the template, or add the links under every page's content from your child theme's `functions.php`:
+
+`add_filter( 'the_content', function ( $content ) {
+	if ( ! is_page() || ! in_the_loop() || ! is_main_query() ) {
+		return $content;
+	}
+	return $content . get_the_post_navigation();
+} );`
+
+For pages, the links follow the order shown under Pages > All Pages: each parent, then its children. Use the `scpo_reverse_adjacent_posts` filter if "previous" and "next" come out the wrong way round for you.
+
+= Can I move an item to another page of a long list? =
+
+Drag-and-drop works within the page you are looking at. To move an item further, turn on the "Order column" option in Settings > SCPOrder and type the position you want into the item's Order box. The Order column is not available for hierarchical types such as Pages.
+
+= Why can't I drag on the Drafts view or in search results? =
+
+Those views are sorted by something other than your custom order (last modified date, search relevance), so dragging there would scramble it. Reorder from the "All" view instead. The same applies after clicking a column heading to sort by it.
+
+= How do parent and child pages behave? =
+
+Dragging a parent page moves its child pages with it. With the keyboard, a page moves among its own siblings only. Reordering never changes a page's parent — use Quick Edit or the page editor for that.
+
+= What happens when I deactivate or delete the plugin? =
+
+Deactivating leaves everything in place, so reactivating restores your order. Deleting the plugin removes its settings and the `term_order` column it added for taxonomy ordering, so term order is lost. Post and page order values (`menu_order`) are WordPress's own and are left as they are.
 
 == Screenshots ==
 
-1. Drag-and-drop reordering of posts in the admin list table
-2. Drag-and-drop reordering of custom post types
-3. Plugin settings page - select post types and taxonomies to enable
-4. Reset order functionality for specific post types
+1. Drag-and-drop reordering of a custom post type
+2. Drag-and-drop reordering of posts in the admin list table
+3. Settings page - select the post types and taxonomies to sort
 
 == Changelog ==
+
+= 2.8.9 - 2026-09-29 =
+
+**Bug fixes**
+
+* Fixed dragging on the **Drafts**, **Pending** or search-results view of a list scrambling your order. Those views are sorted by date or relevance, and a drag saved every row on the screen in that order. Drag-and-drop is now only offered on views that show your custom order.
+* Fixed `wp_get_recent_posts()` — used by many "recent posts" widgets and blocks — returning the *oldest* posts of a sorted post type. A descending sort on a date column is now respected by `get_posts()` too.
+* Fixed the Tags admin list showing the wrong tags on each page once there were more than fit on one page, so dragging reordered the wrong set of tags.
+* Fixed tag clouds and the editor's "most used tags" showing arbitrary tags: `orderby => count` (and other meaningful term orders such as `include`, `slug__in` and meta values) is now respected. WooCommerce product categories keep following your custom order.
+* Fixed dragging on page 2 or later of a long page tree moving pages you never touched onto another page of the list. Pages are now numbered in the order the tree is shown, so a save only ever affects the rows on screen.
+* Fixed keyboard reordering in page and category trees: a page now moves past whole sibling branches, never lands inside another branch or above its own parent, and Escape puts everything back exactly as it was. Dragging with the mouse no longer picks up rows that are not really its children.
+* Fixed previous/next links skipping a post that shares an order number with the current one (for example a copy made by a duplicate-post plugin).
+* Fixed searches and extra queries on search results pages being forced into the custom order, and a "called incorrectly" notice for `is_search()` when queries ran before the main one.
+* Fixed a save with Quick Edit open sending the edited post twice, which misplaced it. On the Classic engine an open Bulk Edit row made the whole save fail silently.
+* Fixed drag-and-drop reporting a failure when another plugin printed a notice into the reply (the Order column already coped with this since 2.8.6).
+* Fixed enabling Pages reshuffling pages that share a Page Attributes order value: ties are now settled alphabetically, as WordPress showed them.
+* Fixed saving the settings — or resetting one post type — renumbering every other sorted type.
+* Fixed Reset Order turning the drag handle off on older installs, leaving stale numbers behind on sites with a persistent object cache, and accepting post types the form does not offer.
+* Fixed taxonomies registered with capital letters not staying enabled after saving the settings.
+* Fixed term order not updating in `get_the_terms()` (used by most themes to list a post's categories and tags) on sites with a persistent object cache.
+* Fixed network super admins being locked out of reordering when "Who can reorder" is restricted to certain roles.
+* Fixed long page trees being cut off when saved (PHP's `max_input_vars` limit).
+* Fixed the site-wide setup notice being shown to, and dismissable by, users who cannot change the plugin's settings; it also no longer shows once only taxonomies are enabled.
+* Fixed the Reset Order button and the setup notice's dismiss button failing when the admin is reached through a proxy, another port or http/https mismatch.
+* The `term_order` column is now only recorded as installed once it really exists. If the database refused to add it, term queries keep working unsorted instead of failing.
+
+**Improvements**
+
+* A failed save now keeps its message on screen with a **Retry** button, and requests time out after 20 seconds instead of hanging.
+* The Order column updates its numbers after a drag, no longer sends the same position twice, and rejects positions such as 0 or 2.5 instead of silently misreading them.
+* Keyboard users hear how to use the drag handle before grabbing a row, and are told when a row cannot move any further.
+* Right-to-left languages, Windows High Contrast mode and the admin colour scheme are now supported by the drag handle and save message; the drag animation respects "reduce motion".
+* Typing in the Order box or other fields inside a row no longer starts a drag.
+* Much faster on large sites: typing a position in the Order column and saving a drag now use a few batched queries that only touch rows whose number changes, and tidying up the order after new posts are published no longer flushes the entire object cache.
+* Uninstalling on multisite now handles large networks, and no longer removes a `term_order` column that another plugin created.
+* The plugin header now declares "Requires at least: 6.2", so WordPress enforces the minimum version.
 
 = 2.8.8 - 2026-08-26 =
 
@@ -323,7 +404,7 @@ Note: full parent/child ordering (keeping a drag within its own level) is still 
 
 **Bug fixes**
 
-* Fixed newly created posts and items landing at the **bottom** of the manual order on sites upgraded from before 2.8.0 — which made the latest post appear at the bottom of admin lists instead of the top. The 2.8.0 "new-item placement" feature shipped defaulting to *bottom*, which silently reversed the long-standing behavior (new items went to the **top**). The default is now *top* again. If you prefer new items at the bottom, choose it under Settings → Sortable Post Types → "New items". Sites that already selected *bottom* keep their choice. Reported by @ffusion and @deisedesign.
+* Fixed newly created posts and items landing at the **bottom** of the manual order on sites upgraded from before 2.8.0 — which made the latest post appear at the bottom of admin lists instead of the top. The 2.8.0 "new-item placement" feature shipped defaulting to *bottom*, which silently reversed the long-standing behavior (new items went to the **top**). The default is now *top* again. If you prefer new items at the bottom, choose it under Settings → SCPOrder → Advanced Options → "New items". Sites that already selected *bottom* keep their choice. Reported by @ffusion and @deisedesign.
 
 = 2.8.1 - 2026-06-22 =
 
@@ -335,7 +416,7 @@ Note: full parent/child ordering (keeping a drag within its own level) is still 
 
 **New features**
 
-* **Choose where new items are placed** — a setting to add newly created posts/pages/items to the bottom (default) or top of the manual order. Props @mplusb (#45).
+* **Choose where new items are placed** — a setting to add newly created posts/pages/items to the bottom or top of the manual order (the default was changed to top in 2.8.2). Props @mplusb (#45).
 * **Optional “Order” number column** — turn on an editable position column on enabled (non-hierarchical) post-type lists to type an item's exact order, including jumping it across paginated pages. Hidden by default and toggleable via Screen Options. (Hierarchical types like Pages are handled separately in a future release.) Props @mplusb (#76, #89, #136).
 * **Role-based reordering** — restrict drag-and-drop reordering to specific roles in Settings > SCPOrder, with a new `scpo_capability` filter for developers. Props @mplusb (#95, #133).
 
@@ -382,7 +463,7 @@ Note: full parent/child ordering (keeping a drag within its own level) is still 
 **New Settings (Settings > SCPOrder)**
 
 * Drag & Drop Engine — choose "Modern" (SortableJS, default) or "Classic" (the legacy jQuery UI sorter)
-* Drag handle — optionally show a grip icon on row hover; hidden by default, and never affects accessibility (keyboard users can always reveal it)
+* Drag handle — show a grip icon on row hover; shown by default, can be turned off, and never affects accessibility (keyboard users can always reveal it)
 
 **Accessibility**
 
@@ -577,6 +658,9 @@ Note: full parent/child ordering (keeping a drag within its own level) is still 
 
 == Upgrade Notice ==
 
+= 2.8.9 =
+Fixes dragging on Drafts/search views scrambling the order, recent-posts lists showing the oldest posts, wrong tags on paginated tag lists, tag clouds, keyboard moves in page trees, and pages moving on long page trees. Recommended for all users.
+
 = 2.8.8 =
 Important fix: enabling a post type (or just re-saving the settings) could overwrite an order your site already had, including WordPress's own page order. Existing order is now preserved. Also fixes dragging a parent page leaving its children behind. Recommended for all users.
 
@@ -592,6 +676,15 @@ Fixes stale order numbers on sites using a persistent object cache (Redis/Memcac
 = 2.8.4 =
 Performance fix: the admin was slow on sites with many posts because the plugin ran its order normalization on every admin page. It now runs only on the sortable list screens and uses a single batched query. Recommended for all users, especially large sites.
 
+= 2.8.3 =
+Security: drag-and-drop now checks that you may edit every item you reorder. Also fixes the manual order disappearing after using the list filters. Recommended for all users.
+
+= 2.8.2 =
+New items are placed at the top of the order again, as they were before 2.8.0. Recommended for all users.
+
+= 2.8.1 =
+Adds the scpo_reverse_adjacent_posts filter to swap the direction of previous/next post links.
+
 = 2.8.0 =
 New: choose where new items are placed, an optional editable "Order" number column (great for paginated lists), and role-based reordering control.
 
@@ -605,7 +698,7 @@ Fixes previous/next post navigation links pointing to the wrong adjacent post fo
 Bug-fix release: prevents post order from being scrambled on MariaDB / MySQL 8 during order normalization, and honors `orderby=include` term queries. Recommended for all users.
 
 = 2.7.0 =
-New modern drag-and-drop: smoother sorting, touch support, full keyboard accessibility, and visible save feedback. Fixes saving in reverse-proxy / custom-port / HTTPS setups and auto-recovers expired security tokens. Fully backward compatible — the classic jQuery sorter remains available as a fallback.
+New drag-and-drop engine: smoother sorting, touch and keyboard support, and visible save feedback. Fixes saving behind proxies, custom ports and HTTPS, and recovers expired security tokens. The classic jQuery sorter remains available.
 
 = 2.6.1 =
 Confirmed compatible with WordPress 7.0. Maintenance release with no functional changes.
