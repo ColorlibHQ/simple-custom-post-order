@@ -18,7 +18,10 @@ for u in "edit.php" "edit.php?post_type=page" "edit.php?post_type=portfolio" "ed
   n=$(has_sorter "$u"); ok "sorter loads on $u" $([ "$n" -gt 0 ] && echo 1 || echo 0) "$n"
 done
 TAGID=$(wpe 'echo get_terms(["taxonomy"=>"post_tag","number"=>1,"hide_empty"=>false,"fields"=>"ids"])[0];')
-for u in "edit.php?post_status=draft" "edit.php?post_status=pending" "edit.php?s=a" "edit.php?order=desc" "edit.php?orderby=title&order=asc" "edit-tags.php?taxonomy=post_tag&s=a" "term.php?taxonomy=post_tag&tag_ID=$TAGID" "post-new.php" "edit.php?post_type=page&post_status=draft" "index.php" "plugins.php"; do
+POSTID=$(wpe 'echo get_posts(["numberposts"=>1,"fields"=>"ids"])[0];')
+# Add New and the dashboard's Quick Draft create auto-drafts. Test an existing
+# editor and the profile screen instead, so these gate checks leave no content.
+for u in "edit.php?post_status=draft" "edit.php?post_status=pending" "edit.php?s=a" "edit.php?order=desc" "edit.php?orderby=title&order=asc" "edit-tags.php?taxonomy=post_tag&s=a" "term.php?taxonomy=post_tag&tag_ID=$TAGID" "post.php?post=$POSTID&action=edit" "edit.php?post_type=page&post_status=draft" "profile.php" "plugins.php"; do
   n=$(has_sorter "$u"); ok "sorter NOT loaded on $u" $([ "$n" -eq 0 ] && echo 1 || echo 0) "$n"
 done
 
@@ -66,3 +69,5 @@ NEW=$(tail -n +$((LOGSTART+1)) "$LOG" | grep -i "simple-custom-post-order" | gre
 ok "no PHP notices/warnings from the plugin in debug.log" $([ -z "$NEW" ] && echo 1 || echo 0) "$(echo "$NEW" | head -3)"
 
 echo; echo "HTTP RESULT: $PASS passed, $FAIL failed"
+
+exit "$((FAIL > 0))"

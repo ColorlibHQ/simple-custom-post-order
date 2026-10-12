@@ -12,30 +12,43 @@
     // Only real item rows. A plain 'tr' also matched an open Quick Edit row
     // (id "edit-N") and the Bulk Edit row (serialized as bulk[]=edit → ID 0),
     // which made the server reject the whole save with a 403.
+    var originalOrder = '';
+    function saveOrder(action) {
+        var list = $('#the-list');
+        list.sortable('disable');
+        $.post(scporder_vars.ajax_url, {
+            action: action,
+            order: list.sortable('serialize'),
+            original_order: originalOrder,
+            nonce: scporder_vars.nonce
+        }).done(function(response) {
+            if (!response || !response.success) {
+                window.alert(response && response.data && response.data.message || scporder_vars.i18n.error);
+            }
+        }).fail(function(xhr) {
+            var data = xhr.responseJSON && xhr.responseJSON.data;
+            window.alert(data && data.message || scporder_vars.i18n.error);
+        }).always(function() { list.sortable('enable'); });
+    }
+
     var items = 'tr:not(.inline-edit-row):not(.no-items):not(#bulk-edit)';
 
     $('table.posts #the-list, table.pages #the-list').sortable({
         'items': items,
         'axis': 'y',
         'helper': fixHelper,
+        'start': function () { originalOrder = $('#the-list').sortable('serialize'); },
         'update': function (e, ui) {
-            $.post( scporder_vars.ajax_url, {
-                action: 'update-menu-order',
-                order: $('#the-list').sortable('serialize'),
-                nonce: scporder_vars.nonce
-            });
+            saveOrder('update-menu-order');
         }
     });
     $('table.tags #the-list').sortable({
         'items': items,
         'axis': 'y',
         'helper': fixHelper,
+        'start': function () { originalOrder = $('#the-list').sortable('serialize'); },
         'update': function (e, ui) {
-            $.post( scporder_vars.ajax_url, {
-                action: 'update-menu-order-tags',
-                order: $('#the-list').sortable('serialize'),
-                nonce: scporder_vars.nonce
-            });
+            saveOrder('update-menu-order-tags');
         }
     });
 

@@ -38,7 +38,7 @@ function scpo_engine() {
 
 function scpo_private( string $method, ...$args ) {
 	$m = new ReflectionMethod( 'SCPO_Engine', $method );
-	$m->setAccessible( true );
+	if ( PHP_VERSION_ID < 80100 ) { $m->setAccessible( true ); }
 	return $m->invoke( scpo_engine(), ...$args );
 }
 
@@ -113,12 +113,13 @@ $recent  = wp_get_recent_posts( [ 'numberposts' => 3, 'post_status' => 'publish'
 $newest  = $wpdb->get_var( "SELECT MAX(post_date) FROM $wpdb->posts WHERE post_type='post' AND post_status='publish'" );
 t( 'wp_get_recent_posts returns the newest post first', isset( $recent[0] ) && $recent[0]['post_date'] === $newest, ( $recent[0]['post_date'] ?? '-' ) . ' vs ' . $newest );
 
+$expected_page_values = array_map( 'intval', $wpdb->get_col( "SELECT menu_order FROM $wpdb->posts WHERE post_type='page' AND post_status='publish' ORDER BY menu_order ASC LIMIT 5" ) );
 $pages = get_posts( [ 'post_type' => 'page', 'numberposts' => 5 ] );
 $mo    = wp_list_pluck( $pages, 'menu_order' );
-t( 'get_posts default on sorted type is menu_order ASC (legacy kept)', $mo === array_values( array_map( 'intval', $mo ) ) && $mo == [ 1, 2, 3, 4, 5 ], json_encode( $mo ) );
+t( 'get_posts default on sorted type is menu_order ASC (legacy kept)', $mo === array_values( array_map( 'intval', $mo ) ) && count( $mo ) === 5 && $mo === $expected_page_values, json_encode( $mo ) );
 
 $pages = get_posts( [ 'post_type' => 'page', 'orderby' => 'menu_order', 'numberposts' => 5 ] );
-t( 'get_posts orderby=menu_order (no order) stays ASC (legacy kept)', wp_list_pluck( $pages, 'menu_order' ) == [ 1, 2, 3, 4, 5 ], json_encode( wp_list_pluck( $pages, 'menu_order' ) ) );
+t( 'get_posts orderby=menu_order (no order) stays ASC (legacy kept)', count( $pages ) === 5 && wp_list_pluck( $pages, 'menu_order' ) === $expected_page_values, json_encode( wp_list_pluck( $pages, 'menu_order' ) ) );
 
 $q = new WP_Query( [ 'post_type' => 'page', 'posts_per_page' => 5, 'fields' => 'ids' ] );
 t( 'WP_Query default on sorted type is menu_order ASC', false !== strpos( $q->request, 'menu_order ASC' ) );
@@ -152,15 +153,17 @@ $top   = get_terms( [ 'taxonomy' => 'post_tag', 'orderby' => 'count', 'order' =>
 $want  = array_map( 'intval', $wpdb->get_col( "SELECT count FROM $wpdb->term_taxonomy WHERE taxonomy='post_tag' ORDER BY count DESC LIMIT 5" ) );
 t( 'get_terms orderby=count returns the most-used tags', array_map( 'intval', wp_list_pluck( $top, 'count' ) ) === $want, json_encode( wp_list_pluck( $top, 'count' ) ) . ' want ' . json_encode( $want ) );
 
+$expected_tag_values = array_map( 'intval', $wpdb->get_col( "SELECT t.term_order FROM $wpdb->terms t JOIN $wpdb->term_taxonomy tt ON t.term_id=tt.term_id WHERE tt.taxonomy='post_tag' ORDER BY t.term_order ASC LIMIT 5" ) );
 $def = get_terms( [ 'taxonomy' => 'post_tag', 'number' => 5, 'hide_empty' => false ] );
-t( 'get_terms default order is term_order 1..5', array_map( 'intval', wp_list_pluck( $def, 'term_order' ) ) === [ 1, 2, 3, 4, 5 ], json_encode( wp_list_pluck( $def, 'term_order' ) ) );
+t( 'get_terms default order follows stored term_order', count( $def ) === 5 && array_map( 'intval', wp_list_pluck( $def, 'term_order' ) ) === $expected_tag_values, json_encode( wp_list_pluck( $def, 'term_order' ) ) );
 
 $ids = array_map( 'intval', $wpdb->get_col( "SELECT t.term_id FROM $wpdb->terms t JOIN $wpdb->term_taxonomy tt ON t.term_id=tt.term_id WHERE taxonomy='post_tag' ORDER BY t.term_order DESC LIMIT 4" ) );
 $inc = get_terms( [ 'taxonomy' => 'post_tag', 'include' => $ids, 'orderby' => 'include', 'hide_empty' => false, 'fields' => 'ids' ] );
 t( 'get_terms orderby=include respected', array_map( 'intval', $inc ) === $ids );
 
+$expected_category_values = array_map( 'intval', $wpdb->get_col( "SELECT t.term_order FROM $wpdb->terms t JOIN $wpdb->term_taxonomy tt ON t.term_id=tt.term_id WHERE tt.taxonomy='category' ORDER BY t.term_order ASC LIMIT 4" ) );
 $cats = get_terms( [ 'taxonomy' => 'category', 'orderby' => 'id', 'hide_empty' => false, 'number' => 4 ] );
-t( 'get_terms orderby=id (wp_dropdown_categories default) still manual', array_map( 'intval', wp_list_pluck( $cats, 'term_order' ) ) === [ 1, 2, 3, 4 ], json_encode( wp_list_pluck( $cats, 'term_order' ) ) );
+t( 'get_terms orderby=id (wp_dropdown_categories default) still manual', count( $cats ) === 4 && array_map( 'intval', wp_list_pluck( $cats, 'term_order' ) ) === $expected_category_values, json_encode( wp_list_pluck( $cats, 'term_order' ) ) );
 
 // get_the_terms after a reorder (relationship cache is not cleared by clean_term_cache).
 $post_id = (int) $wpdb->get_var( "SELECT tr.object_id FROM $wpdb->term_relationships tr JOIN $wpdb->term_taxonomy tt ON tr.term_taxonomy_id=tt.term_taxonomy_id WHERE tt.taxonomy='post_tag' GROUP BY tr.object_id HAVING COUNT(*) >= 3 LIMIT 1" );
@@ -503,7 +506,7 @@ rollback();
 section( 'Misc' );
 
 t( 'review notice class is prefixed', class_exists( 'SCPO_Review_Notice' ) && ! class_exists( 'Simple_Review' ) );
-$hdr = get_file_data( WP_PLUGIN_DIR . '/simple-custom-post-order/simple-custom-post-order.php', [ 'ra' => 'Requires at least' ] );
+$hdr = get_file_data( SCPORDER_DIR . 'simple-custom-post-order.php', [ 'ra' => 'Requires at least' ] );
 t( 'plugin header declares Requires at least', '6.2' === $hdr['ra'] );
 
 begin();
@@ -532,7 +535,34 @@ if ( $sub ) {
 	wp_set_current_user( 1 );
 }
 
+/* Failure injection: exercise the real wpdb boundary without persisting writes. */
+section( 'Database failures and query opt-out' );
+$nonce = wp_create_nonce( 'scporder_nonce_action' );
+foreach ( [ 'update_menu_order', 'scpo_ajax_set_position', 'scpo_ajax_reset_order' ] as $method ) {
+	begin();
+	$before_options = get_option( 'scporder_options' );
+	$before_hooks = did_action( 'scp_update_menu_order' );
+	$ids = $wpdb->get_col( "SELECT ID FROM $wpdb->posts WHERE post_type='post' AND post_status='publish' ORDER BY menu_order LIMIT 2" );
+	$reject_update = function ( $sql ) use ( $wpdb ) {
+		return 0 === strpos( $sql, "UPDATE $wpdb->posts SET" ) ? '' : $sql;
+	};
+	add_filter( 'query', $reject_update );
+	try {
+		$r = ajax( $method, [ 'nonce' => $nonce, 'scpo_security' => wp_create_nonce( 'scpo-reset-order' ), 'order' => "post[]={$ids[1]}&post[]={$ids[0]}", 'id' => $ids[1], 'position' => 1, 'items' => [ 'post' ] ] );
+	} finally {
+		remove_filter( 'query', $reject_update );
+	}
+	t( "$method reports a failed database write", is_array( $r ) && empty( $r['success'] ) );
+	t( "$method does not emit a success action after failure", $before_hooks === did_action( 'scp_update_menu_order' ) );
+	t( "$method preserves enabled types after failure", $before_options === get_option( 'scporder_options' ) );
+	rollback();
+}
+$q = new WP_Query( [ 'post_type' => 'post', 'orderby' => 'title', 'order' => 'DESC', 'suppress_filters' => false, 'scpo_ignore_custom_order' => true, 'fields' => 'ids' ] );
+t( 'query opt-out keeps explicit descending sort with suppress_filters present', false !== strpos( $q->request, 'post_title DESC' ) );
+
 echo "\nRESULT: {$GLOBALS['scpo_results']['pass']} passed, {$GLOBALS['scpo_results']['fail']} failed\n";
 if ( $GLOBALS['scpo_results']['failed'] ) {
 	echo 'Failed: ' . implode( '; ', $GLOBALS['scpo_results']['failed'] ) . "\n";
 }
+
+exit( $GLOBALS['scpo_results']['fail'] > 0 ? 1 : 0 );

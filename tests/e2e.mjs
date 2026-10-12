@@ -1,5 +1,5 @@
 // Real-browser end-to-end tests against a dev site (headless Chrome via puppeteer-core).
-import puppeteer from 'puppeteer-core';
+const { default: puppeteer } = await import( process.env.SCPO_PUPPETEER || 'puppeteer-core' );
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 
@@ -104,12 +104,36 @@ try {
 	await page.reload( { waitUntil: 'networkidle2' } );
 	ok( 'order survives reload', JSON.stringify( ( await rowIds() ).slice( 0, 6 ) ) === JSON.stringify( after.slice( 0, 6 ) ) );
 
+	/* ---------------- Two tabs: stale ordering must not overwrite ---------------- */
+	console.log( '\n== Concurrent tabs ==' );
+	const second = await browser.newPage();
+	try {
+		await second.goto( B + '/edit.php', { waitUntil: 'networkidle2' } );
+		const staleRows = await second.$$eval( '#the-list > tr[id]', ( rows ) => rows.map( ( row ) => row.id ) );
+		await keyboardMove( ( await rowIds() )[5], [ 'ArrowUp' ] );
+		ok( 'first tab saves its move', await waitToast( 'saved' ) );
+		const winningOrder = await rowIds();
+		await second.focus( `#${ staleRows[8] } .scpo-handle` );
+		await second.keyboard.press( 'Space' );
+		await second.keyboard.press( 'ArrowUp' );
+		await second.keyboard.press( 'Space' );
+		await second.waitForSelector( '.scpo-toast--error', { timeout: 8000 } );
+		ok( 'stale tab gets an explanatory conflict', /another window/.test( await second.$eval( '.scpo-toast__message', ( el ) => el.textContent ) ) );
+		ok( 'conflict offers Reload list', 'Reload list' === await second.$eval( '.scpo-toast__retry', ( el ) => el.textContent ) );
+		ok( 'stale save did not overwrite the first tab', increasing( dbMenuOrders( winningOrder.map( idNum ) ) ) );
+		await Promise.all( [ second.waitForNavigation( { waitUntil: 'networkidle2' } ), second.click( '.scpo-toast__retry' ) ] );
+		ok( 'reload reconciles the stale tab', JSON.stringify( winningOrder ) === JSON.stringify( await second.$$eval( '#the-list > tr[id]', ( rows ) => rows.map( ( row ) => row.id ) ) ) );
+	} finally {
+		await second.close();
+	}
+
 	/* ---------------- Order column input ---------------- */
 	console.log( '\n== Order column input ==' );
 	before = await rowIds();
 	ajax.length = 0;
 	const target = before[ 8 ];
-	await page.click( `#${ target } .scpo-order-input`, { clickCount: 3 } );
+	await page.click( `#${ target } .scpo-order-input` );
+	await page.$eval( `#${ target } .scpo-order-input`, ( el ) => el.select() );
 	await page.keyboard.type( '2' );
 	const nav = page.waitForNavigation( { waitUntil: 'networkidle2', timeout: 8000 } ).catch( () => null );
 	await page.keyboard.press( 'Enter' );
@@ -118,7 +142,9 @@ try {
 	ok( 'Enter + blur sends one set_position request', ajax.filter( ( a ) => a.action === 'scpo_set_position' ).length === 1, String( ajax.filter( ( a ) => a.action === 'scpo_set_position' ).length ) );
 	ok( 'item is now at position 2', 2 === dbMenuOrders( [ idNum( target ) ] )[ 0 ] );
 	ok( 'row shows at position 2 after reload', ( await rowIds() )[ 1 ] === target );
-	await page.click( `#${ ( await rowIds() )[ 4 ] } .scpo-order-input`, { clickCount: 3 } );
+	const invalidInput = `#${ ( await rowIds() )[ 4 ] } .scpo-order-input`;
+	await page.click( invalidInput );
+	await page.$eval( invalidInput, ( el ) => el.select() );
 	ajax.length = 0;
 	await page.keyboard.type( '0' );
 	await page.keyboard.press( 'Tab' );
@@ -209,7 +235,9 @@ try {
 	ok( 'payload has no duplicate IDs with Quick Edit open', qe && new Set( ids ).size === ids.length, qe ? qe.order.slice( 0, 80 ) : 'no request' );
 	ok( 'payload carries no edit[] entry', qe && ! /edit(%5B|\[)/.test( qe.order ) );
 	ok( 'Quick Edit inputs still usable (typing works)', await ( async () => {
-		await page.click( 'tr.inline-edit-row input[name="post_title"]', { clickCount: 3 } );
+		await page.click( 'tr.inline-edit-row input[name="post_title"]' );
+		const focused = await page.$eval( 'tr.inline-edit-row input[name="post_title"]', ( el ) => { const focused = document.activeElement === el; el.select(); return focused; } );
+		if ( ! focused ) return false;
 		await page.keyboard.type( 'x' );
 		return /x$/.test( await page.$eval( 'tr.inline-edit-row input[name="post_title"]', ( i ) => i.value ) );
 	} )() );
@@ -257,11 +285,13 @@ try {
 	await keyboardMove( before[ 5 ], [ 'ArrowUp' ] );
 	ok( 'network failure shows the error toast', await waitToast( 'error', 12000 ) );
 	ok( 'error toast offers Retry', !! ( await page.$( '.scpo-toast__retry' ) ) );
+	ok( 'unsaved order prevents accidental navigation', await page.evaluate( () => ! window.dispatchEvent( new Event( 'beforeunload', { cancelable: true } ) ) ) );
 	page.off( 'request', failReq );
 	await page.setRequestInterception( false );
 	const shown = await rowIds();
 	await page.click( '.scpo-toast__retry' );
 	ok( 'Retry saves the order', await waitToast( 'saved' ) );
+	ok( 'successful save clears the navigation warning', await page.evaluate( () => window.dispatchEvent( new Event( 'beforeunload', { cancelable: true } ) ) ) );
 	await page.reload( { waitUntil: 'networkidle2' } );
 	ok( 'retried order persisted', JSON.stringify( ( await rowIds() ).slice( 0, 8 ) ) === JSON.stringify( shown.slice( 0, 8 ) ) );
 
@@ -276,6 +306,22 @@ try {
 	ok( 'term_order matches the new order', increasing( dbTermOrders( after.slice( 0, 5 ).map( idNum ) ) ) );
 	await page.reload( { waitUntil: 'networkidle2' } );
 	ok( 'tag order survives reload (page 1 = first 20 in manual order)', ( await rowIds() )[ 0 ] === before[ 2 ] );
+
+	/* ---------------- Terms added without a page reload ---------------- */
+	console.log( '\n== AJAX-added tag ==' );
+	const newTagName = 'scpo-e2e-' + Date.now();
+	try {
+		await page.type( '#tag-name', newTagName );
+		await page.click( '#addtag #submit' );
+		await page.waitForFunction( ( name ) => Array.from( document.querySelectorAll( '#the-list .row-title' ) ).some( ( el ) => el.textContent === name ), {}, newTagName );
+		const newRow = await page.$$eval( '#the-list > tr[id]', ( rows, name ) => rows.find( ( row ) => row.querySelector( '.row-title' )?.textContent === name ).id, newTagName );
+		await page.waitForSelector( `#${ newRow } .scpo-handle` );
+		await keyboardMove( newRow, [ 'ArrowDown' ] );
+		ok( 'new tag can be reordered without reloading', await waitToast( 'saved' ) );
+		ok( 'new tag baseline matches persisted order', increasing( dbTermOrders( ( await rowIds() ).slice( 0, 5 ).map( idNum ) ) ) );
+	} finally {
+		wp( `$term=get_term_by("name",${ JSON.stringify( newTagName ) },"post_tag"); if($term) wp_delete_term($term->term_id,"post_tag"); echo 1;` );
+	}
 
 	/* ---------------- Classic engine ---------------- */
 	console.log( '\n== Classic (jQuery UI) engine ==' );
@@ -314,3 +360,5 @@ try {
 
 console.log( `\nE2E RESULT: ${ pass } passed, ${ fail } failed` );
 if ( failed.length ) console.log( 'Failed: ' + failed.join( '; ' ) );
+
+process.exitCode = fail > 0 ? 1 : 0;

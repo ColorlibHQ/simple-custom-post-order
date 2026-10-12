@@ -1,6 +1,6 @@
 {
   "name": "simple-custom-post-order",
-  "version": "2.8.9",
+  "version": "2.8.10",
   "private": true,
   "description": "Drag-and-drop ordering for WordPress posts, pages, custom post types and taxonomies.",
   "homepage": "https://www.colorlib.com",
@@ -11,6 +11,8 @@
     "node": ">=14"
   },
   "scripts": {
+    "test": "php tests/unit.php",
+    "test:local": "bash tests/local.sh",
     "build": "grunt minjs && grunt i18n",
     "zip": "grunt build-archive"
   },

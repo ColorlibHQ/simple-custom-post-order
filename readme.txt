@@ -4,7 +4,7 @@ Tags: post order, custom post order, sort posts, reorder posts, drag drop order
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 7.1
-Stable tag: 2.8.9
+Stable tag: 2.8.10
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -46,6 +46,8 @@ Easily reorder posts, pages, custom post types, and taxonomies with intuitive dr
 * Choose whether newly created items go to the top (default) or the bottom of the order
 * Choose which user roles may reorder
 * Changes saved automatically via AJAX - no page refresh needed, with a Retry button if a save fails
+* Conflicting edits are rejected with a recovery message; the Modern engine offers a Reload list button
+* The Modern engine warns before leaving with pending or failed saves
 * Works seamlessly with the default WordPress admin experience
 
 **Smart Query Integration**
@@ -55,6 +57,7 @@ Easily reorder posts, pages, custom post types, and taxonomies with intuitive dr
 * Does not interfere with search results (maintains relevance sorting)
 * Previous/next post links follow the custom order
 * Compatible with `get_posts()`, `WP_Query`, and standard loops
+* Opt out per query with `'scpo_ignore_custom_order' => true`
 
 **Reset & Restore**
 
@@ -166,6 +169,10 @@ The plugin uses WordPress's native `menu_order` field for posts and pages, and a
 
 == Installation ==
 
+= Database Requirement =
+
+From 2.8.10, safe reordering requires InnoDB for the posts table and, when taxonomy sorting is enabled, the terms table. If a table uses another engine, ask your hosting provider to migrate it after taking a backup. The plugin reports unsupported storage and does not convert tables automatically.
+
 = Automatic Installation =
 
 1. Log in to your WordPress admin panel
@@ -225,7 +232,7 @@ No, the plugin is highly optimized. It only loads scripts on relevant admin page
 
 = Can multiple users reorder at the same time? =
 
-While technically possible, we recommend coordinating reordering activities to avoid conflicts. The last save wins if two users modify the same list simultaneously.
+Yes. Modern and Classic drags send the list's original order, and numeric moves send the item's original value. If these are stale, the plugin rejects the save and asks you to reload before reordering again. Older integrations that omit these fields retain their legacy behavior. See the recovery details below.
 
 = Does it work with multisite? =
 
@@ -251,11 +258,30 @@ Yes. Go to Settings > SCPOrder and set the "Drag & Drop Engine" to "Classic". De
 
 Yes. As of 2.7.0 the save request is always sent same-origin, which fixes silent save failures behind reverse proxies, load balancers, non-standard ports, and HTTP/HTTPS or domain mismatches. Expired security tokens now also refresh and retry automatically.
 
+= What happens if another editor changes the order? =
+
+New drag requests include the order displayed before the move. If another request changed that order, the save is rejected and the Modern engine offers “Reload list”. Numeric moves also check the item’s original order value. Requests from older integrations without these fields retain their legacy behavior.
+
+Drag and numeric order saves use InnoDB transactions: a failure in one batch rolls back the operation’s earlier batches. Existing transactions are preserved with savepoints. The relevant posts or terms table must use InnoDB; the plugin reports unsupported storage and never converts tables automatically. An interrupted connection during commit can leave the outcome uncertain, so reload before retrying. Reset Order remains a separate operation; these transaction guarantees do not cover its settings update.
+
+The Modern engine warns before leaving while an order is unsaved. Once saving succeeds, the warning is removed.
+
 = Can I programmatically override the custom order? =
 
 Yes. With `WP_Query`, a query for an enabled post type that sets its own `orderby` (for example `'orderby' => 'title', 'order' => 'DESC'`) keeps it. A query without an `orderby` gets the custom order.
 
 `get_posts()` is different: it fills in `orderby => date, order => DESC` before the plugin sees the query, so the plugin can't tell what you actually asked for. It gives the default date sort the custom order and, for compatibility, turns a descending sort ascending — except on the date columns `post_date`, `modified` and `post_modified`. So to get the newest items first with `get_posts()`, use `'orderby' => 'post_date'`; for any other descending sort, use `WP_Query`.
+
+To bypass this plugin's automatic post ordering for one query, pass `'scpo_ignore_custom_order' => true`. This works with both `WP_Query` and `get_posts()`, including descending title or date sorts:
+
+    $posts = get_posts( [
+        'post_type' => 'post',
+        'orderby' => 'title',
+        'order' => 'DESC',
+        'scpo_ignore_custom_order' => true,
+    ] );
+
+The opt-out leaves the query's ordering arguments untouched; it does not change saved order values or other queries. Omit it to retain the existing automatic ordering behavior.
 
 For taxonomy terms, `get_terms()` and similar calls get the custom order for the usual sorts (name, slug, ID, WooCommerce's category order). Sorts that mean something else are respected: `count`, `include`, `slug__in`, `name__in`, `parent`, `term_taxonomy_id`, meta values and `none`. Clicking a column heading in the admin always wins.
 
@@ -295,6 +321,23 @@ Deactivating leaves everything in place, so reactivating restores your order. De
 3. Settings page - select the post types and taxonomies to sort
 
 == Changelog ==
+
+= 2.8.10 - 2026-10-12 =
+
+**Safer saves and recovery**
+
+* Fixed failed order reads and writes reporting success. Drag and numeric saves now roll back all batches when a database write fails, preserving a caller's existing transaction with savepoints.
+* Added stale-order checks for Modern and Classic drags and the Order column. Conflicting edits are rejected instead of overwriting the order; the Modern engine offers a Reload list button. Retrying an already-saved drag remains safe.
+* Added a Modern-engine warning before leaving with pending or failed saves. The warning clears after saving succeeds, and newly added rows refresh the saved list baseline.
+* Improved server error messages and retry handling. The Order column now treats unsuccessful HTTP responses as failures, and Classic drags are disabled while saving.
+* Fixed failed resets disabling sorting despite database errors; a settings failure after a reset is now reported separately.
+
+**Developers and compatibility**
+
+* Added the `scpo_ignore_custom_order` query argument for `WP_Query` and `get_posts()` to bypass automatic post ordering without changing saved values or existing defaults.
+* Safe reordering now requires InnoDB for the relevant posts/terms tables. Unsupported storage returns an explanatory error; no automatic table conversion occurs.
+* Added failure-injection tests, real database transaction tests, browser recovery checks, PHP compatibility CI, and a local install/test runner with verified restoration of ordering and settings.
+* Updated translation strings and release validation. WordPress 6.2+ and PHP 7.4+ remain required; no paid service or subscription is needed.
 
 = 2.8.9 - 2026-09-29 =
 
@@ -657,6 +700,9 @@ Note: full parent/child ordering (keeping a drag within its own level) is still 
 * Initial release
 
 == Upgrade Notice ==
+
+= 2.8.10 =
+Safer order saves with rollback, stale-edit protection, clearer errors, and unsaved-change warnings. Reordering now requires InnoDB posts/terms tables; unsupported engines are not converted automatically. Back up before upgrading.
 
 = 2.8.9 =
 Fixes dragging on Drafts/search views scrambling the order, recent-posts lists showing the oldest posts, wrong tags on paginated tag lists, tag clouds, keyboard moves in page trees, and pages moving on long page trees. Recommended for all users.

@@ -130,8 +130,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 				}
 				$button.prop('disabled', false);
 			},
-			error: function() {
-				$message.text('<?php echo esc_js( __( 'An error occurred.', 'simple-custom-post-order' ) ); ?>');
+			error: function(xhr) {
+				var data = xhr.responseJSON && xhr.responseJSON.data;
+				$message.text(data && typeof data.message === 'string' ? data.message : '<?php echo esc_js( __( 'An error occurred.', 'simple-custom-post-order' ) ); ?>');
 				$button.prop('disabled', false);
 			}
 		});

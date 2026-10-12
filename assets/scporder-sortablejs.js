@@ -238,6 +238,10 @@
 			}
 			if ( added ) {
 				injectHandles();
+				// Quick Edit and newly added terms refresh the clean list's baseline.
+				if ( ! unsavedOrder && ! saving && ! pendingSave && ! isDragging && ! grabbed ) {
+					savedOrder = serializeOrder();
+				}
 			}
 		} ).observe( list, { childList: true } );
 	}
@@ -694,6 +698,21 @@
 		return pairs.join( '&' );
 	}
 
+	var savedOrder = serializeOrder();
+	var unsavedOrder = false;
+	function warnBeforeLeaving( event ) {
+		event.preventDefault();
+		event.returnValue = '';
+	}
+	function markUnsaved( dirty ) {
+		if ( dirty === unsavedOrder ) { return; }
+		unsavedOrder = dirty;
+		if ( dirty ) {
+			window.addEventListener( 'beforeunload', warnBeforeLeaving );
+		} else {
+			window.removeEventListener( 'beforeunload', warnBeforeLeaving );
+		}
+	}
 	var saving = false;      // a save request is currently in flight
 	var pendingSave = false; // the list changed again before that request returned,
 	                         // or a save is waiting for a drag / keyboard grab to end
@@ -726,6 +745,7 @@
 	 * always wins (no out-of-order races).
 	 */
 	function saveOrder() {
+		markUnsaved( true );
 		if ( saving ) {
 			pendingSave = true;
 			return;
@@ -848,6 +868,7 @@
 			body = new URLSearchParams();
 			body.set( 'action', action );
 			body.set( 'order', order );
+			body.set( 'original_order', savedOrder );
 			body.set( 'nonce', vars.nonce || '' );
 			body = body.toString();
 		} catch ( e ) {
@@ -861,11 +882,14 @@
 				return {
 					ok: !! ( res.ok && r.json && r.json.success ),
 					staleNonce: r.staleNonce,
+					reload: !! ( r.json && r.json.data && r.json.data.reload ),
+					message: r.json && r.json.data && typeof r.json.data.message === 'string' ? r.json.data.message : '',
 				};
 			} )
 			.then(
 				function ( r ) {
 					if ( r.ok ) {
+						savedOrder = order;
 						finishSave( true );
 						return;
 					}
@@ -881,8 +905,8 @@
 						} );
 						return;
 					}
-					// Genuine rejection (e.g. permission denied) — retrying won't help.
-					finishSave( false );
+					// Surface the server's recovery instructions without exposing HTML.
+					finishSave( false, r.message, r.reload );
 				},
 				function () {
 					// Transient/network error or timeout: retry once, then give up.
@@ -930,7 +954,7 @@
 			);
 	}
 
-	function finishSave( ok ) {
+	function finishSave( ok, message, reload ) {
 		saving = false;
 		if ( ok && pendingSave ) {
 			// Order changed again mid-flight — persist the latest (or wait for
@@ -940,13 +964,14 @@
 		}
 		pendingSave = false;
 		if ( ok ) {
+			markUnsaved( false );
 			syncOrderInputs();
 			showToast( strings.saved || 'Order saved', 'saved' );
 		} else {
 			// The list now shows an order the server doesn't have. Keep the error
 			// up with a Retry: every save sends the whole visible order, so one
 			// successful retry (or the next drag) persists everything.
-			showToast( strings.error || 'Couldn’t save — please try again', 'error', true );
+			showToast( message || strings.error || 'Couldn’t save — please try again', 'error', true, reload );
 		}
 	}
 
@@ -1006,7 +1031,7 @@
 	}
 
 	var hideTimer;
-	function showToast( message, state, withRetry ) {
+	function showToast( message, state, withRetry, reload ) {
 		clearTimeout( hideTimer );
 		toast.textContent = '';
 		var msg = document.createElement( 'span' );
@@ -1027,7 +1052,8 @@
 				}
 			};
 			toast.appendChild(
-				toastButton( strings.retry || 'Retry', 'scpo-toast__retry', function () {
+				toastButton( reload ? ( strings.reload || 'Reload list' ) : ( strings.retry || 'Retry' ), 'scpo-toast__retry', function () {
+					if ( reload ) { markUnsaved( false ); window.location.reload(); return; }
 					saveOrder();
 					refocus();
 				} )

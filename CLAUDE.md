@@ -16,7 +16,7 @@ grunt minjs
 grunt i18n
 
 # Check version numbers + release notes agree (header, SCPORDER_VERSION, readme
-# Stable tag, package.json, top of both changelogs, Upgrade Notice ≤ 300 chars)
+# Stable tag, package/lock versions, top of both changelogs, Upgrade Notice ≤ 300 chars)
 grunt release-check
 
 # Create distribution ZIP — runs release-check, minjs and i18n first, so it can
@@ -46,7 +46,9 @@ wordpress.org builds translations on translate.wordpress.org by parsing the
 source, and `load_plugin_textdomain()` was removed for the same reason.
 
 `package.json`'s `version` is checked by `grunt release-check` (it is the reference
-the other five places are compared against). `package-lock.json` is tracked since
+for plugin metadata, both package-lock version fields, and release notes).
+See `.github/RELEASING.md` for the SVN and GitHub release procedure.
+`package-lock.json` is tracked since
 2.8.9. Build tooling was brought to the latest majors in 2.8.9 (grunt 1.6, cssmin 5, uglify 5,
 compress 2, load-grunt-tasks 5; Node ≥ 14) with byte-identical minified output and zip
 contents. `overrides.adm-zip` pins the patched 0.6.x: compress 2.0 declares the

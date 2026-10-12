@@ -196,13 +196,14 @@
 			input.setAttribute( 'data-scpo-sent', String( num ) );
 		}
 		var pos = input.getAttribute( 'data-scpo-sent' );
-		opts = opts || { netRetries: 1, nonceRefreshed: false };
+		opts = opts || { netRetries: 1, nonceRefreshed: false, originalPosition: input.defaultValue };
 		input.classList.add( 'is-saving' );
 
 		var body = new URLSearchParams();
 		body.set( 'action', 'scpo_set_position' );
 		body.set( 'id', id );
 		body.set( 'position', pos );
+		body.set( 'original_position', opts.originalPosition );
 		body.set( 'nonce', vars.nonce );
 
 		post( body.toString() )
@@ -210,7 +211,7 @@
 				var r = parseReply( res.text );
 				var json = r.json;
 				return {
-					ok: !! ( json && json.success ),
+					ok: !! ( res.ok && json && json.success ),
 					staleNonce: r.staleNonce,
 					message: json && json.data && json.data.message ? json.data.message : '',
 				};
@@ -226,7 +227,7 @@
 				if ( r.staleNonce && ! opts.nonceRefreshed ) {
 					refreshNonce( function ( refreshed ) {
 						if ( refreshed ) {
-							commit( input, true, { netRetries: 1, nonceRefreshed: true } );
+							commit( input, true, { netRetries: 1, nonceRefreshed: true, originalPosition: opts.originalPosition } );
 						} else {
 							fail( input, vars.expired );
 						}
@@ -248,6 +249,7 @@
 						commit( input, true, {
 							netRetries: opts.netRetries - 1,
 							nonceRefreshed: opts.nonceRefreshed,
+							originalPosition: opts.originalPosition,
 						} );
 					}, 800 );
 					return;

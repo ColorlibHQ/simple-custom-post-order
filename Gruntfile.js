@@ -31,6 +31,7 @@ module.exports = function(grunt) {
                 src: [
                     '**/*.php',
                     '!**/node_modules/**',
+                    '!tests/**',
                 ], //all php
                 expand: true,
             }],
@@ -41,7 +42,7 @@ module.exports = function(grunt) {
               options: {
                   cwd: '',                          // Directory of files to internationalize.
                   domainPath: 'languages/',         // Where to save the POT file.
-                  exclude: [],                      // List of files or directories to ignore.
+                  exclude: ['tests'],                      // List of files or directories to ignore.
                   include: [],                      // List of files or directories to include.
                   mainFile: 'simple-custom-post-order.php',                     // Main project file.
                   potComments: '',                  // The copyright at the beginning of the POT file.
@@ -78,6 +79,7 @@ module.exports = function(grunt) {
               '!simple-custom-post-order.zip',
               '!Thumbs.db',
               '!CLAUDE.md',
+              '!AGENTS.md',
               '!MODERNIZATION-PLAN.md' ],
           dest: 'build/'
       }
@@ -128,7 +130,7 @@ module.exports = function(grunt) {
 
   /*
    * Fails the build when the version numbers or release notes disagree:
-   * plugin header, SCPORDER_VERSION, readme Stable tag, package.json, the top
+   * plugin header, SCPORDER_VERSION, readme Stable tag, package/lock versions, the top
    * entries of both changelogs, and an Upgrade Notice (≤ 300 characters, the
    * wordpress.org limit) for the version being released.
    */
@@ -137,8 +139,11 @@ module.exports = function(grunt) {
       var php     = grunt.file.read( 'simple-custom-post-order.php' );
       var readme  = grunt.file.read( 'readme.txt' );
       var log     = grunt.file.read( 'CHANGELOG.md' );
+      var lock    = grunt.file.readJSON( 'package-lock.json' );
       var errors  = [];
       var found   = {
+          'package-lock.json version': lock.version,
+          'package-lock.json root package version': ( ( lock.packages || {} )[''] || {} ).version,
           'plugin header Version': ( php.match( /^\s*\*\s*Version:\s*(\S+)/m ) || [] )[1],
           'SCPORDER_VERSION': ( php.match( /define\(\s*'SCPORDER_VERSION',\s*'([^']+)'/ ) || [] )[1],
           'readme Stable tag': ( readme.match( /^Stable tag:\s*(\S+)/m ) || [] )[1],

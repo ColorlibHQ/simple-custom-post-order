@@ -5,6 +5,31 @@ WordPress.org-formatted history lives in [`readme.txt`](readme.txt); this file m
 recent releases in [Keep a Changelog](https://keepachangelog.com/) style and follows
 [Semantic Versioning](https://semver.org/).
 
+## [2.8.10] - 2026-10-12
+
+Reliability update for order saves, concurrent editing, and error recovery.
+**Upgrade requirement:** the posts/terms tables used for reordering must use
+InnoDB. Unsupported engines receive an error; tables are never converted
+automatically. WordPress 6.2+ and PHP 7.4+ requirements are unchanged.
+
+### Fixed
+- Failed order reads/writes now return errors instead of reporting success. InnoDB batches are atomic, with rollback on failure and savepoints that preserve a caller’s transaction. Locked rows are checked against the read snapshot before updates.
+- Failed resets preserve enabled post types; failed settings updates after a reset are reported separately.
+- The Modern sorter displays server recovery messages as text. The Order column respects unsuccessful HTTP responses.
+- Regression suites return failing exit codes and compare stored orders without assuming gapless fixtures.
+
+### Added
+- Concurrent-tab protection for Modern and Classic drags, plus stale-value checks for numeric moves. A conflicting save asks the user to reload; replaying an already-saved drag remains safe.
+- Modern sorter navigation warnings while changes are pending or failed, removed after a successful save. AJAX-added rows refresh the clean list’s baseline.
+- Installed-site test runner with verified restoration of post/term identifiers, order values, and plugin options; real database rollback/concurrency tests; and two-tab browser coverage.
+- `scpo_ignore_custom_order` query argument to bypass automatic post ordering while preserving existing defaults for other queries.
+- Isolated PHP failure-injection tests, source/minified Chrome checks, and a PHP 7.4/8.2/8.4/8.5 CI matrix.
+
+### Changed
+- Safe ordering writes require InnoDB; unsupported storage returns an explanatory error without converting tables.
+- Exclude contributor guidance from distribution archives and development tests from translation extraction.
+- Release validation checks both package-lock version fields. WordPress.org and GitHub release instructions and copy-ready release notes live in `.github/`.
+
 ## [2.8.9] - 2026-09-29
 
 ### Fixed

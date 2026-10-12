@@ -3,7 +3,7 @@
  * Plugin Name: Simple Custom Post Order
  * Plugin URI: https://wordpress.org/plugins/simple-custom-post-order/
  * Description: Order posts, pages, custom post types, and taxonomies with a simple drag and drop interface.
- * Version: 2.8.9
+ * Version: 2.8.10
  * Author: Colorlib
  * Author URI: https://colorlib.com/
  * Requires at least: 6.2
@@ -39,7 +39,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 define( 'SCPORDER_URL', plugins_url( '', __FILE__ ) );
 define( 'SCPORDER_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SCPORDER_VERSION', '2.8.9' );
+define( 'SCPORDER_VERSION', '2.8.10' );
 
 $scporder = new SCPO_Engine();
 
@@ -465,6 +465,7 @@ class SCPO_Engine {
 				'atBottom'     => __( '%1$s can’t move down any further.', 'simple-custom-post-order' ),
 				'retry'        => __( 'Retry', 'simple-custom-post-order' ),
 				'dismiss'      => __( 'Dismiss', 'simple-custom-post-order' ),
+				'reload'       => __( 'Reload list', 'simple-custom-post-order' ),
 			],
 		] );
 	}
@@ -869,16 +870,64 @@ class SCPO_Engine {
 	 * @param array  $current      Optional map of ID => current order value. Rows
 	 *                             already holding their new value are then neither
 	 *                             written nor invalidated.
-	 * @return void
+	 * @return int[]|WP_Error IDs written, or a database failure.
 	 */
-	private function renumber_rows( string $table, string $id_column, string $order_column, array $ordered_ids, string $taxonomy = '', array $current = [] ): void {
+	private function renumber_rows( string $table, string $id_column, string $order_column, array $ordered_ids, string $taxonomy = '', array $current = [] ) {
 		$values   = [];
 		$position = 1;
 		foreach ( $ordered_ids as $id ) {
 			$values[ (int) $id ] = $position++;
 		}
 
-		$this->write_order_values( $table, $id_column, $order_column, $values, $taxonomy, $current );
+		return $this->write_order_values( $table, $id_column, $order_column, $values, $taxonomy, $current );
+	}
+
+	/**
+	 * Open a private transaction, or a savepoint inside a caller's transaction.
+	 * Never START TRANSACTION blindly: that implicitly commits an existing one.
+	 * SAVEPOINT outside a transaction is accepted but discarded by MySQL; the
+	 * immediate rollback probe distinguishes that case without changing data.
+	 *
+	 * @return array|WP_Error Transaction ownership and a private savepoint name.
+	 */
+	private function begin_order_transaction( string $table ) {
+		global $wpdb;
+		$engine = $wpdb->get_var( $wpdb->prepare(
+			'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s',
+			$table
+		) );
+		if ( 'innodb' !== strtolower( (string) $engine ) ) {
+			return new WP_Error( 'scpo_transaction_unavailable', __( 'Safe reordering requires an InnoDB database table. Please contact your site administrator.', 'simple-custom-post-order' ) );
+		}
+
+		static $sequence = 0;
+		$name = 'scpo_order_' . ++$sequence;
+		$suppressed = $wpdb->suppress_errors( true );
+		$created = $wpdb->query( "SAVEPOINT $name" );
+		$nested = false !== $created && false !== $wpdb->query( "ROLLBACK TO SAVEPOINT $name" );
+		$wpdb->suppress_errors( $suppressed );
+		if ( ! $nested && false === $wpdb->query( 'START TRANSACTION' ) ) {
+			return new WP_Error( 'scpo_transaction_failed', __( 'Could not start a safe order update. Please try again.', 'simple-custom-post-order' ) );
+		}
+		return [ 'owned' => ! $nested, 'name' => $name ];
+	}
+
+	/** Close only the transaction/savepoint owned by this operation. */
+	private function finish_order_transaction( array $transaction, bool $commit ): bool {
+		global $wpdb;
+		if ( $transaction['owned'] ) {
+			return false !== $wpdb->query( $commit ? 'COMMIT' : 'ROLLBACK' );
+		}
+		$name = $transaction['name'];
+		if ( ! $commit && false === $wpdb->query( "ROLLBACK TO SAVEPOINT $name" ) ) {
+			return false;
+		}
+		return false !== $wpdb->query( "RELEASE SAVEPOINT $name" );
+	}
+
+	/** A conflict is recoverable by reloading, never by overwriting another save. */
+	private function order_conflict(): WP_Error {
+		return new WP_Error( 'scpo_order_conflict', __( 'The order changed in another window or request. Reload the list before reordering.', 'simple-custom-post-order' ) );
 	}
 
 	/**
@@ -891,9 +940,9 @@ class SCPO_Engine {
 	 * @param array  $values       Map of ID => new order value.
 	 * @param string $taxonomy     Taxonomy, when writing terms (see invalidate_order_cache()).
 	 * @param array  $current      Optional map of ID => current value; unchanged rows are skipped.
-	 * @return int[] IDs actually written.
+	 * @return int[]|WP_Error IDs written, or a rolled-back update/conflict.
 	 */
-	private function write_order_values( string $table, string $id_column, string $order_column, array $values, string $taxonomy = '', array $current = [] ): array {
+	private function write_order_values( string $table, string $id_column, string $order_column, array $values, string $taxonomy = '', array $current = [] ) {
 		global $wpdb;
 
 		$changed = [];
@@ -912,6 +961,38 @@ class SCPO_Engine {
 			return [];
 		}
 
+		$transaction = $this->begin_order_transaction( $table );
+		if ( is_wp_error( $transaction ) ) {
+			return $transaction;
+		}
+
+		// Lock and compare the snapshot used to calculate this move. Include
+		// unchanged rows: their positions also influenced the requested order.
+		ksort( $current, SORT_NUMERIC );
+		foreach ( array_chunk( $current, 1000, true ) as $expected ) {
+			$in = implode( ', ', array_fill( 0, count( $expected ), '%d' ) );
+			$rows = $wpdb->get_results( $wpdb->prepare(
+				"SELECT $id_column, $order_column FROM $table WHERE $id_column IN ($in) ORDER BY $id_column FOR UPDATE",
+				array_keys( $expected )
+			), ARRAY_N );
+			$read_failed = $wpdb->last_error || ! is_array( $rows );
+			$actual = $read_failed ? [] : array_column( $rows, 1, 0 );
+			$matches = count( $actual ) === count( $expected );
+			foreach ( $expected as $id => $value ) {
+				if ( ! array_key_exists( $id, $actual ) || ( null === $actual[ $id ] ) !== ( null === $value ) || (int) $actual[ $id ] !== (int) $value ) {
+					$matches = false;
+				}
+			}
+			if ( $read_failed || ! $matches ) {
+				$this->finish_order_transaction( $transaction, false );
+				$this->invalidate_order_cache( $table, array_keys( $current ), $taxonomy );
+				return $read_failed
+					? new WP_Error( 'scpo_order_read_failed', __( 'Could not read the current order. Please try again.', 'simple-custom-post-order' ) )
+					: $this->order_conflict();
+			}
+		}
+
+		$ids = [];
 		foreach ( array_chunk( $changed, 1000, true ) as $chunk ) {
 			$cases = '';
 			$args  = [];
@@ -926,10 +1007,27 @@ class SCPO_Engine {
 			// listed IDs, so every row matches a WHEN — ELSE just guards against ever
 			// writing NULL.
 			$sql = "UPDATE $table SET $order_column = CASE $id_column{$cases} ELSE $order_column END WHERE $id_column IN ($in)";
-			$wpdb->query( $wpdb->prepare( $sql, array_merge( $args, array_keys( $chunk ) ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+			$result = $wpdb->query( $wpdb->prepare( $sql, array_merge( $args, array_keys( $chunk ) ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+			if ( false === $result ) {
+				// Roll back every batch, without committing a caller's transaction.
+				$this->finish_order_transaction( $transaction, false );
+				$this->invalidate_order_cache( $table, array_merge( $ids, array_keys( $chunk ) ), $taxonomy );
+				return new WP_Error(
+					'scpo_order_write_failed',
+					__( 'Could not save the complete order. Reload the list to check its current order before trying again.', 'simple-custom-post-order' )
+				);
+			}
+			foreach ( array_keys( $chunk ) as $id ) {
+				$ids[] = $id;
+			}
 		}
 
-		$ids = array_keys( $changed );
+		if ( ! $this->finish_order_transaction( $transaction, true ) ) {
+			$this->finish_order_transaction( $transaction, false );
+			$this->invalidate_order_cache( $table, $ids, $taxonomy );
+			return new WP_Error( 'scpo_commit_failed', __( 'Could not confirm the order was saved. Reload the list before trying again.', 'simple-custom-post-order' ) );
+		}
+
 		$this->invalidate_order_cache( $table, $ids, $taxonomy );
 
 		return $ids;
@@ -1115,7 +1213,36 @@ class SCPO_Engine {
 			$wpdb->prepare( "SELECT $id_column, $column FROM $table WHERE $id_column IN ($in)", $ids ),
 			ARRAY_N
 		);
+		if ( $wpdb->last_error || ! is_array( $current ) ) {
+			wp_send_json_error( [ 'message' => __( 'Could not read the current order. Please try again.', 'simple-custom-post-order' ) ], 500 );
+		}
+		if ( count( $current ) !== count( $ids ) ) {
+			wp_send_json_error( [ 'message' => __( 'The list has changed. Reload it before reordering.', 'simple-custom-post-order' ) ], 409 );
+		}
 		$current = array_column( $current, 1, 0 );
+
+		if ( isset( $_POST['original_order'] ) ) {
+			$original = is_string( $_POST['original_order'] ) ? $this->parse_order_ids( wp_unslash( $_POST['original_order'] ) ) : [];
+			$original_set = $original;
+			$requested_set = $ids;
+			sort( $original_set );
+			sort( $requested_set );
+			if ( $original_set !== $requested_set ) {
+				wp_send_json_error( [ 'message' => __( 'The list has changed. Reload it before reordering.', 'simple-custom-post-order' ), 'reload' => true ], 409 );
+			}
+			$is_current_order = static function ( array $sequence ) use ( $current ): bool {
+				$previous = null;
+				foreach ( $sequence as $id ) {
+					$value = (int) $current[ $id ];
+					if ( null !== $previous && $value < $previous ) { return false; }
+					$previous = $value;
+				}
+				return true;
+			};
+			if ( ! $is_current_order( $original ) && ! $is_current_order( $ids ) ) {
+				wp_send_json_error( [ 'message' => $this->order_conflict()->get_error_message(), 'reload' => true ], 409 );
+			}
+		}
 
 		$values = array_map( 'intval', array_values( $current ) );
 		sort( $values );
@@ -1148,7 +1275,10 @@ class SCPO_Engine {
 		// One batched write for the rows whose value actually changed, with the
 		// object-cache invalidation that raw writes need (see
 		// invalidate_order_cache(); for terms it resolves each term's taxonomy).
-		$this->write_order_values( $table, $id_column, $column, $new, '', $current );
+		$result = $this->write_order_values( $table, $id_column, $column, $new, '', $current );
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( [ 'message' => $result->get_error_message(), 'reload' => true ], 'scpo_order_conflict' === $result->get_error_code() ? 409 : 500 );
+		}
 
 		if ( $is_posts ) {
 			do_action( 'scp_update_menu_order' );
@@ -2034,7 +2164,24 @@ class SCPO_Engine {
 			),
 			ARRAY_N
 		);
+		if ( $wpdb->last_error || ! is_array( $rows ) ) {
+			wp_send_json_error( [ 'message' => __( 'Could not read the current order. Please try again.', 'simple-custom-post-order' ) ], 500 );
+		}
 		$ids = array_map( 'intval', array_column( $rows, 0 ) );
+		if ( ! in_array( $post_id, $ids, true ) ) {
+			wp_send_json_error( [ 'message' => __( 'The list has changed. Reload it before reordering.', 'simple-custom-post-order' ) ], 409 );
+		}
+
+		if ( isset( $_POST['original_position'] ) ) {
+			$original = $_POST['original_position'];
+			$current_values = array_column( $rows, 1, 0 );
+			if ( ! is_string( $original ) || ! preg_match( '/^-?[0-9]+$/D', $original ) ) {
+				wp_send_json_error( [ 'message' => __( 'Invalid position.', 'simple-custom-post-order' ) ], 400 );
+			}
+			if ( (int) $original !== (int) $current_values[ $post_id ] && array_search( $post_id, $ids, true ) + 1 !== min( $position, count( $ids ) ) ) {
+				wp_send_json_error( [ 'message' => $this->order_conflict()->get_error_message(), 'reload' => true ], 409 );
+			}
+		}
 
 		// Pull the post out, then splice it in at the requested 1-based position.
 		$ids    = array_values( array_diff( $ids, [ $post_id ] ) );
@@ -2046,7 +2193,10 @@ class SCPO_Engine {
 		// a single typed position on a 20,000-product store cost 40,000 queries
 		// and could time out half-way through, leaving duplicates. Ties are broken
 		// the same way as refresh() and seeding.
-		$this->renumber_rows( $wpdb->posts, 'ID', 'menu_order', $ids, '', array_column( $rows, 1, 0 ) );
+		$result = $this->renumber_rows( $wpdb->posts, 'ID', 'menu_order', $ids, '', array_column( $rows, 1, 0 ) );
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( [ 'message' => $result->get_error_message(), 'reload' => true ], 'scpo_order_conflict' === $result->get_error_code() ? 409 : 500 );
+		}
 
 		do_action( 'scp_update_menu_order' );
 		wp_send_json_success( [ 'message' => __( 'Order updated.', 'simple-custom-post-order' ) ] );
@@ -2201,7 +2351,8 @@ class SCPO_Engine {
 	 * @return void
 	 */
 	public function scporder_pre_get_posts( $wp_query ): void {
-		if ( ! $wp_query instanceof WP_Query ) {
+		// Explicit opt-out for this query, including get_posts()' injected defaults.
+		if ( ! $wp_query instanceof WP_Query || $wp_query->get( 'scpo_ignore_custom_order' ) ) {
 			return;
 		}
 
@@ -2513,25 +2664,31 @@ class SCPO_Engine {
 			$wpdb->prepare( "SELECT ID FROM $wpdb->posts WHERE post_type IN ($placeholders) AND menu_order <> 0", $items )
 		);
 
+		if ( $wpdb->last_error || ! is_array( $ids ) ) {
+			wp_send_json_error( [ 'message' => __( 'Failed to reset items.', 'simple-custom-post-order' ) ], 500 );
+		}
+
 		$result = $wpdb->query(
 			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- generated %s list, values bound here.
 			$wpdb->prepare( "UPDATE $wpdb->posts SET `menu_order` = 0 WHERE `post_type` IN ($placeholders)", $items )
 		);
 
 		$this->invalidate_order_cache( $wpdb->posts, $ids );
+		if ( false === $result ) {
+			wp_send_json_error( [ 'message' => __( 'Failed to reset items.', 'simple-custom-post-order' ) ], 500 );
+		}
 
 		$scpo_options = get_option( 'scporder_options' );
 
 		if ( is_array( $scpo_options ) && isset( $scpo_options['objects'] ) && is_array( $scpo_options['objects'] ) ) {
+			$old_options = $scpo_options;
 			$scpo_options['objects'] = array_values( array_diff( $scpo_options['objects'], $items ) );
-			update_option( 'scporder_options', $scpo_options );
+			if ( $scpo_options !== $old_options && ! update_option( 'scporder_options', $scpo_options ) ) {
+				wp_send_json_error( [ 'message' => __( 'Order values were reset, but sorting could not be disabled. Please try resetting again.', 'simple-custom-post-order' ) ], 500 );
+			}
 		}
 
-		if ( false !== $result ) {
-			wp_send_json_success( [ 'message' => __( 'Items have been reset.', 'simple-custom-post-order' ) ] );
-		} else {
-			wp_send_json_error( [ 'message' => __( 'Failed to reset items.', 'simple-custom-post-order' ) ] );
-		}
+		wp_send_json_success( [ 'message' => __( 'Items have been reset.', 'simple-custom-post-order' ) ] );
 	}
 
 	/**
