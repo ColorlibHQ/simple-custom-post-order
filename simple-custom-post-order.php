@@ -91,6 +91,7 @@ class SCPO_Engine {
 		// than from inside the sanitize callback (see seed_newly_enabled()).
 		add_action( 'add_option_scporder_options', array( $this, 'seed_on_add_option' ), 10, 2 );
 		add_action( 'update_option_scporder_options', array( $this, 'seed_newly_enabled' ), 10, 2 );
+		add_action( 'created_term', array( $this, 'normalize_new_term' ), 10, 3 );
 
 		add_action( 'wp_ajax_scpo_reset_order', array( $this, 'scpo_ajax_reset_order' ) );
 
@@ -632,7 +633,11 @@ class SCPO_Engine {
 	 * page precede it), so a save only ever reorders the rows on screen.
 	 * Sibling order, which is all the tree displays, is unchanged.
 	 *
-	 * @param array $rows Rows of [ ID, menu_order, post_parent ], siblings already in order.
+	 * Hierarchical taxonomies use it too: WP_Terms_List_Table::_rows() lists
+	 * terms the same depth-first way. That table does not list orphans in its
+	 * tree view, so where they end up does not matter there.
+	 *
+	 * @param array $rows Rows of [ id, order, parent ], siblings already in order.
 	 * @return int[]
 	 */
 	private function tree_order( array $rows ): array {
@@ -697,6 +702,14 @@ class SCPO_Engine {
 	private function normalize_taxonomy( string $taxonomy ): void {
 		global $wpdb;
 
+		// As for hierarchical post types: a gapless sequence can still be out of
+		// tree order, and the drag handler's conflict check compares the order on
+		// screen (the tree) with term_order, refusing every drag until it matches.
+		if ( is_taxonomy_hierarchical( $taxonomy ) ) {
+			$this->renumber_taxonomy( $taxonomy );
+			return;
+		}
+
 		$probe = $wpdb->get_row(
 			$wpdb->prepare(
 				"SELECT COUNT(*) AS cnt, COUNT(DISTINCT term_order) AS distinct_cnt, MAX(term_order) AS max, MIN(term_order) AS min
@@ -716,7 +729,8 @@ class SCPO_Engine {
 
 	/**
 	 * Taxonomy counterpart of renumber_post_type(). Ties are broken by name, the
-	 * order core lists terms in, then term_id.
+	 * order core lists terms in, then term_id. Hierarchical taxonomies are
+	 * numbered in tree order, as their list table shows them.
 	 *
 	 * @param string $taxonomy Taxonomy.
 	 * @return void
@@ -726,7 +740,7 @@ class SCPO_Engine {
 
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT terms.term_id, terms.term_order
+				"SELECT terms.term_id, terms.term_order, term_taxonomy.parent
 				FROM $wpdb->terms AS terms
 				INNER JOIN $wpdb->term_taxonomy AS term_taxonomy ON ( terms.term_id = term_taxonomy.term_id )
 				WHERE term_taxonomy.taxonomy = %s
@@ -736,7 +750,33 @@ class SCPO_Engine {
 			ARRAY_N
 		);
 
-		$this->renumber_rows( $wpdb->terms, 'term_id', 'term_order', array_column( $rows, 0 ), $taxonomy, array_column( $rows, 1, 0 ) );
+		$ordered_ids = is_taxonomy_hierarchical( $taxonomy )
+			? $this->tree_order( $rows )
+			: array_column( $rows, 0 );
+
+		$this->renumber_rows( $wpdb->terms, 'term_id', 'term_order', $ordered_ids, $taxonomy, array_column( $rows, 1, 0 ) );
+	}
+
+	/**
+	 * Keep a sorted hierarchical taxonomy in tree order when a term is added.
+	 *
+	 * The quick-add form on edit-tags.php inserts the new row directly below its
+	 * parent without a reload, and the sorter adopts that DOM as its baseline.
+	 * The new term's term_order is still the column default (0), so a drag
+	 * before the next reload would be refused as a conflict.
+	 *
+	 * @param int    $term_id  Term ID.
+	 * @param int    $tt_id    Term taxonomy ID.
+	 * @param string $taxonomy Taxonomy.
+	 * @return void
+	 */
+	public function normalize_new_term( $term_id, $tt_id, $taxonomy ): void {
+		if ( ! is_string( $taxonomy ) || ! is_taxonomy_hierarchical( $taxonomy ) || ! $this->term_ordering_available()
+			|| ! in_array( $taxonomy, $this->get_scporder_options_tags(), true ) ) {
+			return;
+		}
+
+		$this->renumber_taxonomy( $taxonomy );
 	}
 
 	/**
