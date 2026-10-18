@@ -481,11 +481,14 @@ if ( has_method( 'normalize_taxonomy' ) ) {
 	// ascending. Fixtures use a private taxonomy: category hooks can run DDL (WPML
 	// CMS Navigation truncates a cache table), which commits the transaction.
 	register_taxonomy( 'scpo_tree', 'post', [ 'hierarchical' => true, 'show_ui' => true ] );
-	$enable_tree = function ( $o ) {
+	register_taxonomy( 'scpo_flat', 'post', [ 'show_ui' => true ] );
+	$sortable = []; // taxonomies the filter below adds to the enabled ones
+	$enable   = function ( $o ) use ( &$sortable ) {
 		$o         = is_array( $o ) ? $o : [];
-		$o['tags'] = array_merge( isset( $o['tags'] ) && is_array( $o['tags'] ) ? $o['tags'] : [], [ 'scpo_tree' ] );
+		$o['tags'] = array_merge( isset( $o['tags'] ) && is_array( $o['tags'] ) ? $o['tags'] : [], $sortable );
 		return $o;
 	};
+	add_filter( 'option_scporder_options', $enable );
 	try {
 		$term_tree = function ( string $taxonomy ) use ( $wpdb ): array {
 			$rows = $wpdb->get_results( $wpdb->prepare( "SELECT t.term_id, t.term_order, tt.parent FROM $wpdb->terms t JOIN $wpdb->term_taxonomy tt ON t.term_id = tt.term_id WHERE tt.taxonomy = %s ORDER BY t.term_order, t.name, t.term_id", $taxonomy ) );
@@ -507,12 +510,23 @@ if ( has_method( 'normalize_taxonomy' ) ) {
 			}
 			return $breaks;
 		};
-		$term = function ( string $name, int $parent = 0 ): int {
-			$r = wp_insert_term( $name . ' ' . wp_rand(), 'scpo_tree', [ 'parent' => $parent ] );
+		$term = function ( string $name, int $parent = 0, string $taxonomy = 'scpo_tree' ): int {
+			$r = wp_insert_term( $name . ' ' . wp_rand(), $taxonomy, [ 'parent' => $parent ] );
 			if ( is_wp_error( $r ) ) {
 				throw new RuntimeException( 'Fixture term not created: ' . $r->get_error_message() );
 			}
 			return (int) $r['term_id'];
+		};
+		// Inserts the way the quick-add form does: inside an add-tag AJAX request.
+		$quick_add = function ( string $name, int $parent = 0, string $taxonomy = 'scpo_tree' ) use ( $term ): int {
+			$_POST = $_REQUEST = [ 'action' => 'add-tag' ];
+			add_filter( 'wp_doing_ajax', '__return_true' );
+			try {
+				return $term( $name, $parent, $taxonomy );
+			} finally {
+				remove_filter( 'wp_doing_ajax', '__return_true' );
+				$_POST = $_REQUEST = [];
+			}
 		};
 		$order_writes = function ( callable $fn ) use ( $wpdb ): int {
 			$writes = 0;
@@ -550,16 +564,63 @@ if ( has_method( 'normalize_taxonomy' ) ) {
 		t( 'a term moved to another parent is renumbered into tree order', 0 === $tree_breaks( 'scpo_tree' ) );
 		rollback();
 
-		add_filter( 'option_scporder_options', $enable_tree );
+		$sortable = [ 'scpo_tree' ];
 		begin();
 		$a = $term( 'SCPO tree A' );
 		$term( 'SCPO tree B' );
 		scpo_private( 'normalize_taxonomy', 'scpo_tree' ); // list screen opened
-		$a1 = $term( 'SCPO tree A1', $a ); // quick-add: no reload
+		$a1 = $quick_add( 'SCPO tree A1', $a );
 		list( , $value ) = $term_tree( 'scpo_tree' );
 		t( 'a term added with quick-add is in tree order before any reload', 0 === $tree_breaks( 'scpo_tree' ) && $value[ $a1 ] === $value[ $a ] + 1, json_encode( $value ) );
 		rollback();
 
+		begin();
+		$a = $term( 'SCPO tree A' );
+		scpo_private( 'normalize_taxonomy', 'scpo_tree' );
+		$writes = $order_writes( function () use ( $term, $a ) { $term( 'SCPO tree A1', $a ); } );
+		t( 'a term inserted outside quick-add waits for refresh() (no renumber per insert)', 0 === $writes, "$writes UPDATEs" );
+		rollback();
+
+		begin();
+		$a = $term( 'SCPO tree A' );
+		$b = $term( 'SCPO tree B' );
+		scpo_private( 'normalize_taxonomy', 'scpo_tree' );
+		// Another request changes B between the read and the locked compare.
+		$raced = false;
+		$race  = function ( $q ) use ( &$raced, $wpdb, $b ) {
+			if ( ! $raced && false !== stripos( $q, 'FOR UPDATE' ) && false !== strpos( $q, $wpdb->terms ) ) {
+				$raced = true;
+				$wpdb->query( $wpdb->prepare( "UPDATE $wpdb->terms SET term_order = term_order + 100 WHERE term_id = %d", $b ) );
+			}
+			return $q;
+		};
+		add_filter( 'query', $race );
+		try {
+			$a1 = $quick_add( 'SCPO tree A1', $a );
+		} finally {
+			remove_filter( 'query', $race );
+		}
+		list( , $value ) = $term_tree( 'scpo_tree' );
+		t( 'quick-add reads again after a concurrent change, leaving no term at 0', $raced && 0 === $tree_breaks( 'scpo_tree' ) && $value[ $a1 ] === $value[ $a ] + 1, json_encode( $value ) );
+		rollback();
+
+		$sortable = [ 'scpo_flat' ];
+		begin();
+		$term( 'SCPO flat A', 0, 'scpo_flat' );
+		scpo_private( 'normalize_taxonomy', 'scpo_flat' );
+		$writes = $order_writes( function () use ( $quick_add ) { $quick_add( 'SCPO flat B', 0, 'scpo_flat' ); } );
+		t( 'quick-add in a flat taxonomy does not renumber it', 0 === $writes, "$writes UPDATEs" );
+		rollback();
+
+		$sortable = [];
+		begin();
+		$a = $term( 'SCPO tree A' );
+		scpo_private( 'normalize_taxonomy', 'scpo_tree' );
+		$writes = $order_writes( function () use ( $quick_add, $a ) { $quick_add( 'SCPO tree A1', $a ); } );
+		t( 'quick-add in a taxonomy that is not sorted does not renumber it', 0 === $writes, "$writes UPDATEs" );
+		rollback();
+
+		$sortable = [ 'scpo_tree' ];
 		begin();
 		$a = $term( 'SCPO tree A' );
 		$b = $term( 'SCPO tree B' );
@@ -571,11 +632,12 @@ if ( has_method( 'normalize_taxonomy' ) ) {
 		t( 'a drag after a term changed parent is saved, not refused as a conflict', ! empty( $r['success'] ), json_encode( $r ) );
 		rollback();
 
-		t( 'term tree fixtures were rolled back', 0 === (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->term_taxonomy WHERE taxonomy = 'scpo_tree'" ) );
+		t( 'term tree fixtures were rolled back', 0 === (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->term_taxonomy WHERE taxonomy IN ('scpo_tree', 'scpo_flat')" ) );
 	} finally {
 		rollback();
-		remove_filter( 'option_scporder_options', $enable_tree );
+		remove_filter( 'option_scporder_options', $enable );
 		unregister_taxonomy( 'scpo_tree' );
+		unregister_taxonomy( 'scpo_flat' );
 	}
 }
 

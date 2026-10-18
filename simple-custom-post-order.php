@@ -633,9 +633,8 @@ class SCPO_Engine {
 	 * page precede it), so a save only ever reorders the rows on screen.
 	 * Sibling order, which is all the tree displays, is unchanged.
 	 *
-	 * Hierarchical taxonomies use it too: WP_Terms_List_Table::_rows() lists
-	 * terms the same depth-first way. That table does not list orphans in its
-	 * tree view, so where they end up does not matter there.
+	 * Hierarchical taxonomies use it too (WP_Terms_List_Table::_rows() renders
+	 * the same order; it hides orphans, so their place does not matter there).
 	 *
 	 * @param array $rows Rows of [ id, order, parent ], siblings already in order.
 	 * @return int[]
@@ -697,17 +696,15 @@ class SCPO_Engine {
 	 * Taxonomy counterpart of normalize_post_type().
 	 *
 	 * @param string $taxonomy Taxonomy.
-	 * @return void
+	 * @return int[]|WP_Error IDs written, or the failed write.
 	 */
-	private function normalize_taxonomy( string $taxonomy ): void {
+	private function normalize_taxonomy( string $taxonomy ) {
 		global $wpdb;
 
-		// As for hierarchical post types: a gapless sequence can still be out of
-		// tree order, and the drag handler's conflict check compares the order on
-		// screen (the tree) with term_order, refusing every drag until it matches.
+		// As for hierarchical post types: gapless is not enough, the drag
+		// conflict check needs term_order to follow the tree on screen.
 		if ( is_taxonomy_hierarchical( $taxonomy ) ) {
-			$this->renumber_taxonomy( $taxonomy );
-			return;
+			return $this->renumber_taxonomy( $taxonomy );
 		}
 
 		$probe = $wpdb->get_row(
@@ -721,21 +718,21 @@ class SCPO_Engine {
 		);
 
 		if ( $this->is_already_sequential( $probe ) ) {
-			return;
+			return [];
 		}
 
-		$this->renumber_taxonomy( $taxonomy );
+		return $this->renumber_taxonomy( $taxonomy );
 	}
 
 	/**
 	 * Taxonomy counterpart of renumber_post_type(). Ties are broken by name, the
 	 * order core lists terms in, then term_id. Hierarchical taxonomies are
-	 * numbered in tree order, as their list table shows them.
+	 * numbered in tree order.
 	 *
 	 * @param string $taxonomy Taxonomy.
-	 * @return void
+	 * @return int[]|WP_Error IDs written, or the failed write.
 	 */
-	private function renumber_taxonomy( string $taxonomy ): void {
+	private function renumber_taxonomy( string $taxonomy ) {
 		global $wpdb;
 
 		$rows = $wpdb->get_results(
@@ -754,16 +751,14 @@ class SCPO_Engine {
 			? $this->tree_order( $rows )
 			: array_column( $rows, 0 );
 
-		$this->renumber_rows( $wpdb->terms, 'term_id', 'term_order', $ordered_ids, $taxonomy, array_column( $rows, 1, 0 ) );
+		return $this->renumber_rows( $wpdb->terms, 'term_id', 'term_order', $ordered_ids, $taxonomy, array_column( $rows, 1, 0 ) );
 	}
 
 	/**
-	 * Keep a sorted hierarchical taxonomy in tree order when a term is added.
-	 *
-	 * The quick-add form on edit-tags.php inserts the new row directly below its
-	 * parent without a reload, and the sorter adopts that DOM as its baseline.
-	 * The new term's term_order is still the column default (0), so a drag
-	 * before the next reload would be refused as a conflict.
+	 * After a quick-add on edit-tags.php, which shows the new row under its parent
+	 * without a reload, keep a sorted hierarchical taxonomy in tree order: at
+	 * term_order 0 the next drag is refused. Other inserts wait for refresh();
+	 * renumbering on each would make imports quadratic.
 	 *
 	 * @param int    $term_id  Term ID.
 	 * @param int    $tt_id    Term taxonomy ID.
@@ -771,12 +766,18 @@ class SCPO_Engine {
 	 * @return void
 	 */
 	public function normalize_new_term( $term_id, $tt_id, $taxonomy ): void {
-		if ( ! is_string( $taxonomy ) || ! is_taxonomy_hierarchical( $taxonomy ) || ! $this->term_ordering_available()
-			|| ! in_array( $taxonomy, $this->get_scporder_options_tags(), true ) ) {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- wp_ajax_add_tag() checked its nonce before inserting.
+		$action = ( isset( $_POST['action'] ) && is_string( $_POST['action'] ) ) ? sanitize_key( wp_unslash( $_POST['action'] ) ) : '';
+		if ( ! wp_doing_ajax() || 'add-tag' !== $action || ! is_string( $taxonomy ) || ! is_taxonomy_hierarchical( $taxonomy )
+			|| ! $this->term_ordering_available() || ! in_array( $taxonomy, $this->get_scporder_options_tags(), true ) ) {
 			return;
 		}
 
-		$this->renumber_taxonomy( $taxonomy );
+		$result = $this->normalize_taxonomy( $taxonomy );
+		// A concurrent insert renumbered first: read again rather than leave this term at 0.
+		if ( is_wp_error( $result ) && 'scpo_order_conflict' === $result->get_error_code() ) {
+			$this->normalize_taxonomy( $taxonomy );
+		}
 	}
 
 	/**
