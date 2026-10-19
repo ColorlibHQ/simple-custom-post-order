@@ -9,6 +9,7 @@ if ( defined( 'ABSPATH' ) ) {
 }
 define( 'ABSPATH', __DIR__ . '/' );
 define( 'ARRAY_N', 'ARRAY_N' );
+define( 'ARRAY_A', 'ARRAY_A' );
 
 class WP_Error {
 	private $message;
@@ -51,11 +52,14 @@ class ScpoUnitDB {
 	public $zero_rows = false;
 	public $writes = 0;
 	public $engine = 'InnoDB';
+	public $status_engine = null;
 	public $in_transaction = false;
 	public $commits = 0;
 	public $rollbacks = 0;
 	public $lock_rows = null;
 	function get_var( $sql ) { return $this->engine; }
+	function get_row( $sql, $output = null ) { return null === $this->status_engine ? null : [ 'Engine' => $this->status_engine ]; }
+	function esc_like( $text ) { return addcslashes( $text, '_%\\' ); }
 	function suppress_errors( $suppress ) { return false; }
 	function prepare( $query, ...$args ) { return $query; }
 	function get_results( ...$args ) {
@@ -179,6 +183,15 @@ scpo_unit_reset();
 $wpdb->engine = 'MyISAM';
 $r = scpo_unit_ajax( 'update_menu_order', [ 'order' => 'post[]=2&post[]=1' ] );
 scpo_unit_check( 'nontransactional storage refuses unsafe writes', ! $r->success && 0 === $wpdb->writes );
+scpo_unit_reset();
+$wpdb->engine = null;
+$r = scpo_unit_ajax( 'update_menu_order', [ 'order' => 'post[]=2&post[]=1' ] );
+scpo_unit_check( 'unreadable engine metadata does not block an InnoDB save', $r->success && 1 === $wpdb->writes && 1 === $wpdb->commits );
+scpo_unit_reset();
+$wpdb->engine = null;
+$wpdb->status_engine = 'MyISAM';
+$r = scpo_unit_ajax( 'update_menu_order', [ 'order' => 'post[]=2&post[]=1' ] );
+scpo_unit_check( 'SHOW TABLE STATUS fallback still refuses nontransactional storage', ! $r->success && 0 === $wpdb->writes );
 scpo_unit_reset();
 $wpdb->rows = [ [ 1, 2 ], [ 2, 1 ], [ 3, 3 ] ];
 $r = scpo_unit_ajax( 'update_menu_order', [ 'order' => 'post[]=3&post[]=1&post[]=2', 'original_order' => 'post[]=1&post[]=2&post[]=3' ] );
