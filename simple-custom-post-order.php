@@ -892,11 +892,7 @@ class SCPO_Engine {
 	 */
 	private function begin_order_transaction( string $table ) {
 		global $wpdb;
-		$engine = $wpdb->get_var( $wpdb->prepare(
-			'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s',
-			$table
-		) );
-		if ( 'innodb' !== strtolower( (string) $engine ) ) {
+		if ( in_array( $this->table_engine( $table ), [ 'myisam', 'aria', 'memory', 'heap', 'csv', 'archive', 'mrg_myisam', 'merge', 'blackhole', 'federated' ], true ) ) {
 			return new WP_Error( 'scpo_transaction_unavailable', __( 'Safe reordering requires an InnoDB database table. Please contact your site administrator.', 'simple-custom-post-order' ) );
 		}
 
@@ -910,6 +906,35 @@ class SCPO_Engine {
 			return new WP_Error( 'scpo_transaction_failed', __( 'Could not start a safe order update. Please try again.', 'simple-custom-post-order' ) );
 		}
 		return [ 'owned' => ! $nested, 'name' => $name ];
+	}
+
+	/**
+	 * Lowercase storage engine of a table, or '' when it cannot be determined.
+	 *
+	 * Only a positively identified non-transactional engine blocks a save. In
+	 * 2.8.10 an empty answer was treated as "not InnoDB", which refused every
+	 * reorder on sites whose tables are InnoDB but whose information_schema
+	 * lookup comes back empty (restricted metadata access, DB proxies, db.php
+	 * drop-ins) — reported on the forum as "Safe reordering requires an InnoDB
+	 * database table". SHOW TABLE STATUS is tried as a fallback; if both are
+	 * silent the save proceeds inside START TRANSACTION as on InnoDB.
+	 *
+	 * @param string $table Table name.
+	 * @return string
+	 */
+	private function table_engine( string $table ): string {
+		global $wpdb;
+		$suppressed = $wpdb->suppress_errors( true );
+		$engine = $wpdb->get_var( $wpdb->prepare(
+			'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s',
+			$table
+		) );
+		if ( ! is_string( $engine ) || '' === $engine ) {
+			$status = $wpdb->get_row( $wpdb->prepare( 'SHOW TABLE STATUS LIKE %s', $wpdb->esc_like( $table ) ), ARRAY_A );
+			$engine = is_array( $status ) && isset( $status['Engine'] ) ? $status['Engine'] : '';
+		}
+		$wpdb->suppress_errors( $suppressed );
+		return strtolower( (string) $engine );
 	}
 
 	/** Close only the transaction/savepoint owned by this operation. */
