@@ -3,7 +3,7 @@
  * Plugin Name: Simple Custom Post Order
  * Plugin URI: https://wordpress.org/plugins/simple-custom-post-order/
  * Description: Order posts, pages, custom post types, and taxonomies with a simple drag and drop interface.
- * Version: 2.8.10
+ * Version: 2.8.11
  * Author: Colorlib
  * Author URI: https://colorlib.com/
  * Requires at least: 6.2
@@ -39,7 +39,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 define( 'SCPORDER_URL', plugins_url( '', __FILE__ ) );
 define( 'SCPORDER_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SCPORDER_VERSION', '2.8.10' );
+define( 'SCPORDER_VERSION', '2.8.11' );
 
 $scporder = new SCPO_Engine();
 
@@ -933,7 +933,7 @@ class SCPO_Engine {
 	 */
 	private function begin_order_transaction( string $table ) {
 		global $wpdb;
-		if ( in_array( $this->table_engine( $table ), [ 'myisam', 'aria', 'memory', 'heap', 'csv', 'archive', 'mrg_myisam', 'merge', 'blackhole', 'federated' ], true ) ) {
+		if ( in_array( $this->table_engine( $table ), [ 'myisam', 'aria', 'memory', 'heap', 'csv', 'archive', 'mrg_myisam', 'merge', 'blackhole', 'federated', 'spider', 'connect', 'mroonga', 'sequence', 'oqgraph', 'sphinx' ], true ) ) {
 			return new WP_Error( 'scpo_transaction_unavailable', __( 'Safe reordering requires an InnoDB database table. Please contact your site administrator.', 'simple-custom-post-order' ) );
 		}
 

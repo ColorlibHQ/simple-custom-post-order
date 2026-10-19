@@ -4,7 +4,7 @@ Tags: post order, custom post order, sort posts, reorder posts, drag drop order
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 7.1
-Stable tag: 2.8.10
+Stable tag: 2.8.11
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -171,7 +171,7 @@ The plugin uses WordPress's native `menu_order` field for posts and pages, and a
 
 = Database Requirement =
 
-From 2.8.10, safe reordering requires InnoDB for the posts table and, when taxonomy sorting is enabled, the terms table. If a table uses another engine, ask your hosting provider to migrate it after taking a backup. The plugin reports unsupported storage and does not convert tables automatically.
+From 2.8.10, safe reordering requires InnoDB for the posts table and, when taxonomy sorting is enabled, the terms table. If a table uses another engine, ask your hosting provider to migrate it after taking a backup. The plugin reports unsupported storage and does not convert tables automatically. Since 2.8.11 the error only appears when the database positively reports a non-transactional engine such as MyISAM; if your host does not reveal the engine, saving proceeds normally.
 
 = Automatic Installation =
 
@@ -321,6 +321,13 @@ Deactivating leaves everything in place, so reactivating restores your order. De
 3. Settings page - select the post types and taxonomies to sort
 
 == Changelog ==
+
+= 2.8.11 - 2026-10-19 =
+
+**Bug fixes**
+
+* Fixed "Safe reordering requires an InnoDB database table" blocking every reorder on sites whose tables are InnoDB. 2.8.10 treated an unanswered storage-engine lookup as "not InnoDB"; the plugin now also asks via `SHOW TABLE STATUS` and only refuses when the database positively reports a non-transactional engine such as MyISAM.
+* Fixed drags in hierarchical taxonomies (Categories, product categories, …) being refused with "The order changed in another window or request" even after reloading. Hierarchical taxonomies are now numbered in the tree order the list shows, as pages have been since 2.8.9, and a term added with the quick-add form is placed under its parent straight away. Sibling order is unchanged; the first visit to the list after upgrading may renumber terms once. Props @huubl.
 
 = 2.8.10 - 2026-10-12 =
 
@@ -700,6 +707,9 @@ Note: full parent/child ordering (keeping a drag within its own level) is still 
 * Initial release
 
 == Upgrade Notice ==
+
+= 2.8.11 =
+Fixes "Safe reordering requires an InnoDB database table" on InnoDB sites, and drags in category-style (hierarchical) taxonomies being refused as conflicts after 2.8.10. Recommended for all 2.8.10 users.
 
 = 2.8.10 =
 Safer order saves with rollback, stale-edit protection, clearer errors, and unsaved-change warnings. Reordering now requires InnoDB posts/terms tables; unsupported engines are not converted automatically. Back up before upgrading.

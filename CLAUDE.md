@@ -115,6 +115,10 @@ Data is passed via `wp_localize_script` as `scporder_vars`: `ajax_url` (a **root
 - **Uninstall**: `scporder_uninstall_db()` drops the `term_order` column and deletes **all** options the plugin writes — `scporder_install`, `scporder_notice`, `scporder_options`, `simple-rate-time`, `scporder_term_order_owner` (plus the `scporder_install_failed` transient). Before 2.8.7 only `scporder_install` went, so the rest survived an uninstall and were silently reused on reinstall (reported by @jamieburchell).
 - **Settings**: `scporder_options` option — an array with keys `objects` (post type slugs), `tags` (taxonomy slugs), `show_advanced_view` (`'1'`/`''`), `engine` (`'sortable'` default / `'classic'`), `show_handle` (`'1'` default / `'0'`), and these 2.8.0 additions: `new_post_position` (`'top'` default / `'bottom'` — where freshly created items land, #45; default was `'bottom'` in 2.8.0–2.8.1 but that silently flipped the long-standing top placement — reported by @ffusion and @deisedesign — and was reverted to `'top'` in 2.8.2), `order_column` (`'1'`/`'0'` default — the optional numeric Order column, #76/#89), and `allowed_roles` (array of role slugs; empty = anyone holding the reorder capability, the default). Plus flag options `scporder_install` and `scporder_notice`.
 
+### Storage-engine gate (2.8.10, relaxed 2.8.11)
+
+Order writes run inside `begin_order_transaction()`, which refuses a save only when `table_engine()` positively identifies a non-transactional engine (MyISAM, Aria, MEMORY, … — a blocklist). `table_engine()` asks `information_schema.TABLES`, then falls back to `SHOW TABLE STATUS LIKE`, both with errors suppressed; an empty answer means "unknown" and the save proceeds in `START TRANSACTION`. **2.8.10 treated unknown as "not InnoDB"** and refused every reorder on InnoDB sites whose host doesn't answer the metadata query (wordpress.org forum "Safe reordering requires an InnoDB database table") — never turn an unknown engine back into a refusal.
+
 ### AJAX endpoints, nonces, capabilities
 
 | Action | Nonce (action/field) | Capability | Purpose |

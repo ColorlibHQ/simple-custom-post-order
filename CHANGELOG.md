@@ -5,6 +5,12 @@ WordPress.org-formatted history lives in [`readme.txt`](readme.txt); this file m
 recent releases in [Keep a Changelog](https://keepachangelog.com/) style and follows
 [Semantic Versioning](https://semver.org/).
 
+## [2.8.11] - 2026-10-19
+
+### Fixed
+- "Safe reordering requires an InnoDB database table" on InnoDB sites. 2.8.10 refused every save when the `information_schema` engine lookup returned nothing (restricted metadata access, database proxies, `db.php` drop-ins). `table_engine()` now falls back to `SHOW TABLE STATUS`, and a save is refused only when a known non-transactional engine (MyISAM, Aria, MEMORY, …) is positively identified. Other transactional engines (NDB, RocksDB, TokuDB, …) are no longer refused.
+- Drags in hierarchical taxonomies refused as conflicts (#155, props @huubl). Terms were numbered flat while the list renders a tree, so 2.8.10's ascending-order conflict check rejected nearly every drag, reload or not. Hierarchical taxonomies are now numbered in tree order via `tree_order()`, and the quick-add form (`add-tag`) renumbers right after inserting.
+
 ## [2.8.10] - 2026-10-12
 
 Reliability update for order saves, concurrent editing, and error recovery.

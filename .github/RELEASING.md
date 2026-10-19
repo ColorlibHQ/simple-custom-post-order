@@ -1,7 +1,7 @@
 # Releasing Simple Custom Post Order
 
-The prepared release is **2.8.10**, dated **2026-10-12**. Git tags use plain
-versions (`2.8.10`, without `v`), matching existing repository tags. If the
+The prepared release is **2.8.11**, dated **2026-10-19**. Git tags use plain
+versions (`2.8.11`, without `v`), matching existing repository tags. If the
 release date changes, update both changelogs before rebuilding.
 
 ## Validate the release
@@ -34,9 +34,9 @@ substitute GitHub's automatically generated source archive.
 
 ## WordPress.org SVN
 
-Use a separate SVN working copy. Check that `2.8.10` has not already been
+Use a separate SVN working copy. Check that `2.8.11` has not already been
 published. Follow WordPress.org's [tagging procedure](https://developer.wordpress.org/plugins/wordpress-org/how-to-use-subversion/):
-update `trunk`, copy it to `tags/2.8.10`, then commit both together.
+update `trunk`, copy it to `tags/2.8.11`, then commit both together.
 The [Stable tag](https://developer.wordpress.org/plugins/wordpress-org/how-your-readme-txt-works/)
 must match the tag directory. Never rewrite an already published tag.
 
@@ -61,9 +61,9 @@ guides, tests, Node dependencies, and `.github/` do not belong in the upload.
 Once the reviewed package is ready to publish:
 
 ```sh
-svn copy trunk tags/2.8.10
+svn copy trunk tags/2.8.11
 svn status
-svn commit trunk tags/2.8.10 -m "Release 2.8.10 — safer order saves and conflict recovery"
+svn commit trunk tags/2.8.11 -m "Release 2.8.11 — InnoDB detection and hierarchical taxonomy drags"
 ```
 
 Complete release confirmation if WordPress.org requests it. Check the plugin
@@ -74,17 +74,17 @@ page and download the served ZIP to verify version and packaged file contents.
 From the clean, tested release commit in the Git checkout:
 
 ```sh
-git tag -a 2.8.10 -m "Release 2.8.10 — safer order saves and conflict recovery"
+git tag -a 2.8.11 -m "Release 2.8.11 — InnoDB detection and hierarchical taxonomy drags"
 git push origin HEAD
-git push origin 2.8.10
-gh release create 2.8.10 simple-custom-post-order.zip \
+git push origin 2.8.11
+gh release create 2.8.11 simple-custom-post-order.zip \
   --repo ColorlibHQ/simple-custom-post-order \
   --verify-tag --draft \
-  --title "2.8.10 — Safer order saves and conflict recovery" \
-  --notes-file .github/release-notes/2.8.10.md
+  --title "2.8.11 — InnoDB detection and hierarchical taxonomy drags" \
+  --notes-file .github/release-notes/2.8.11.md
 ```
 
 The [GitHub CLI release command](https://cli.github.com/manual/gh_release_create)
 attaches the installable ZIP and uses the prepared notes. Review the draft,
 confirm its tag points to the tested commit, and publish it on GitHub. Check
-both channels show 2.8.10 and the InnoDB upgrade requirement.
+both channels show 2.8.11.
