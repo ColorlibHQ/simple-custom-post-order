@@ -13,15 +13,38 @@
     // (id "edit-N") and the Bulk Edit row (serialized as bulk[]=edit → ID 0),
     // which made the server reject the whole save with a 403.
     var originalOrder = '';
+    function orderValues() {
+        var values = {}, complete = true;
+        $('#the-list').children(items).each(function () {
+            var marker = this.querySelector('.scpo-order-snapshot');
+            var raw = marker && marker.getAttribute('data-value');
+            if (raw !== 'null' && !/^-?\d+$/.test(raw || '')) { complete = false; return; }
+            values[this.id.replace(/^.*-/, '')] = raw === 'null' ? null : Number(raw);
+        });
+        return complete ? JSON.stringify(values) : undefined;
+    }
     function saveOrder(action) {
         var list = $('#the-list');
         list.sortable('disable');
-        $.post(scporder_vars.ajax_url, {
+        var payload = {
             action: action,
             order: list.sortable('serialize'),
             original_order: originalOrder,
             nonce: scporder_vars.nonce
-        }).done(function(response) {
+        };
+        var values = orderValues();
+        if (values !== undefined) { payload.original_values = values; }
+        $.post(scporder_vars.ajax_url, payload).done(function(response) {
+            if (response && response.success && response.data && response.data.order_values) {
+                var values = response.data.order_values;
+                list.children(items).each(function () {
+                    var id = this.id.replace(/^.*-/, '');
+                    var marker = this.querySelector('.scpo-order-snapshot');
+                    if (marker && Object.prototype.hasOwnProperty.call(values, id)) {
+                        marker.setAttribute('data-value', String(values[id]));
+                    }
+                });
+            }
             if (!response || !response.success) {
                 window.alert(response && response.data && response.data.message || scporder_vars.i18n.error);
             }
@@ -32,6 +55,25 @@
     }
 
     var items = 'tr:not(.inline-edit-row):not(.no-items):not(#bulk-edit)';
+
+    // The saved values rise down a list shown in its custom order. If they
+    // don't, a theme or another plugin sorted it, and a save would make that
+    // order the custom one (see the Modern sorter's shownInSavedOrder()).
+    var previous = null, shownInOrder = true;
+    $('#the-list').children(items).each(function () {
+        var marker = this.querySelector('.scpo-order-snapshot');
+        var raw = marker && marker.getAttribute('data-value');
+        if (!/^-?\d+$/.test(raw || '')) { return; }
+        if (previous !== null && Number(raw) < previous) { shownInOrder = false; return false; }
+        previous = Number(raw);
+    });
+    if (!shownInOrder) {
+        var strings = scporder_vars.i18n || {};
+        $('<div class="notice notice-warning inline scpo-order-notice"><p></p></div>')
+            .find('p').text(strings.notInOrder || 'Drag and drop is turned off here: this list is not shown in its custom order, so your theme or another plugin is sorting it.').end()
+            .insertBefore($('#the-list').closest('table'));
+        return;
+    }
 
     $('table.posts #the-list, table.pages #the-list').sortable({
         'items': items,

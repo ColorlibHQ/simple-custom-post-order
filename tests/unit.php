@@ -36,7 +36,9 @@ class WP_Query {
 class ScpoUnitResponse extends RuntimeException {
 	public $success;
 	public $status;
+	public $data;
 	function __construct( $success, $data, $status ) {
+		$this->data = $data;
 		parent::__construct( $data['message'] ?? '' );
 		$this->success = $success;
 		$this->status = $status;
@@ -52,12 +54,14 @@ class ScpoUnitDB {
 	public $zero_rows = false;
 	public $writes = 0;
 	public $engine = 'InnoDB';
+	public $packet = 67108864;
+	public $queries = [];
 	public $status_engine = null;
 	public $in_transaction = false;
 	public $commits = 0;
 	public $rollbacks = 0;
 	public $lock_rows = null;
-	function get_var( $sql ) { return $this->engine; }
+	function get_var( $sql ) { return 'SELECT @@max_allowed_packet' === $sql ? $this->packet : $this->engine; }
 	function get_row( $sql, $output = null ) { return null === $this->status_engine ? null : [ 'Engine' => $this->status_engine ]; }
 	function esc_like( $text ) { return addcslashes( $text, '_%\\' ); }
 	function suppress_errors( $suppress ) { return false; }
@@ -68,6 +72,7 @@ class ScpoUnitDB {
 	}
 	function get_col( ...$args ) { return array_column( $this->get_results(), 0 ); }
 	function query( $sql ) {
+		$this->queries[] = $sql;
 		if ( 0 === strpos( $sql, 'SAVEPOINT' ) || 0 === strpos( $sql, 'RELEASE SAVEPOINT' ) ) { return 0; }
 		if ( 0 === strpos( $sql, 'ROLLBACK TO SAVEPOINT' ) ) { return $this->in_transaction ? 0 : false; }
 		if ( 'START TRANSACTION' === $sql ) { $this->in_transaction = true; return 0; }
@@ -182,22 +187,75 @@ scpo_unit_check( 'race after initial read returns conflict without writes', ! $r
 scpo_unit_reset();
 $wpdb->engine = 'MyISAM';
 $r = scpo_unit_ajax( 'update_menu_order', [ 'order' => 'post[]=2&post[]=1' ] );
-scpo_unit_check( 'nontransactional storage refuses unsafe writes', ! $r->success && 0 === $wpdb->writes );
+scpo_unit_check( 'MyISAM saves with one guarded statement and no transaction', $r->success && 1 === $wpdb->writes && 0 === $wpdb->commits );
 scpo_unit_reset();
 $wpdb->engine = null;
 $r = scpo_unit_ajax( 'update_menu_order', [ 'order' => 'post[]=2&post[]=1' ] );
-scpo_unit_check( 'unreadable engine metadata does not block an InnoDB save', $r->success && 1 === $wpdb->writes && 1 === $wpdb->commits );
+scpo_unit_check( 'unknown metadata uses the guarded path without assuming transactions', $r->success && 1 === $wpdb->writes && 0 === $wpdb->commits );
 scpo_unit_reset();
 $wpdb->engine = null;
 $wpdb->status_engine = 'MyISAM';
 $r = scpo_unit_ajax( 'update_menu_order', [ 'order' => 'post[]=2&post[]=1' ] );
-scpo_unit_check( 'SHOW TABLE STATUS fallback still refuses nontransactional storage', ! $r->success && 0 === $wpdb->writes );
+scpo_unit_check( 'SHOW TABLE STATUS fallback enables MyISAM compatibility', $r->success && 1 === $wpdb->writes );
+foreach ( [ 'MyISAM', 'Aria', null ] as $storage ) {
+	foreach ( [ 'success', 'write failure', 'zero rows', 'packet limit' ] as $scenario ) {
+		scpo_unit_reset();
+		$wpdb->engine = $storage;
+		$wpdb->fail_batch = 'write failure' === $scenario ? 1 : 0;
+		$wpdb->zero_rows = 'zero rows' === $scenario;
+		$wpdb->packet = 'packet limit' === $scenario ? 1024 : 67108864;
+		$r = scpo_unit_ajax( 'update_menu_order', [ 'order' => 'post[]=2&post[]=1' ] );
+		scpo_unit_check( "$storage guarded writer: $scenario", ( 'success' === $scenario ) === $r->success && 0 === $wpdb->commits && 0 === $wpdb->rollbacks );
+		scpo_unit_check( "$storage guarded writer never starts a transaction or locks tables explicitly: $scenario", ! array_filter( $wpdb->queries, static function ( $q ) { return preg_match( '/^(START TRANSACTION|LOCK TABLES|UNLOCK TABLES|SAVEPOINT)/', $q ); } ) );
+		if ( 'write failure' === $scenario || 'zero rows' === $scenario ) {
+			scpo_unit_check( "$storage uncertain/conflicting save invalidates its snapshot", $GLOBALS['scpo_invalidated'] === [ 1, 2 ] );
+		}
+		if ( 'packet limit' === $scenario ) { scpo_unit_check( "$storage oversized saves fail before any write", 0 === $wpdb->writes ); }
+	}
+}
+scpo_unit_reset();
+$wpdb->engine = 'MyISAM';
+$r = $writer->invoke( $scporder, $wpdb->posts, 'ID', 'menu_order', [ 1 => 2147483648 ], '', [ 1 => 1 ] );
+scpo_unit_check( 'guarded writer refuses integer overflow before writing', is_wp_error( $r ) && 0 === $wpdb->writes );
+scpo_unit_reset();
+$wpdb->engine = 'CSV';
+$r = scpo_unit_ajax( 'update_menu_order', [ 'order' => 'post[]=2&post[]=1' ] );
+scpo_unit_check( 'unsupported storage still refuses writes', ! $r->success && 0 === $wpdb->writes );
+
 scpo_unit_reset();
 $wpdb->rows = [ [ 1, 2 ], [ 2, 1 ], [ 3, 3 ] ];
 $r = scpo_unit_ajax( 'update_menu_order', [ 'order' => 'post[]=3&post[]=1&post[]=2', 'original_order' => 'post[]=1&post[]=2&post[]=3' ] );
 scpo_unit_check( 'stale browser order cannot overwrite another save', ! $r->success && 409 === $r->status && 0 === $wpdb->writes );
 $r = scpo_unit_ajax( 'update_menu_order', [ 'order' => 'post[]=2&post[]=1&post[]=3', 'original_order' => 'post[]=1&post[]=2&post[]=3' ] );
 scpo_unit_check( 'retry after a lost success response is idempotent', $r->success && 0 === $wpdb->writes );
+foreach ( [ 'update_menu_order', 'update_menu_order_tags' ] as $method ) {
+	scpo_unit_reset();
+	$wpdb->rows = [ [ 1, 2 ], [ 2, 1 ], [ 3, 3 ] ];
+	$r = scpo_unit_ajax( $method, [ 'order' => 'item[]=3&item[]=1&item[]=2', 'original_order' => 'item[]=1&item[]=2&item[]=3', 'original_values' => '{"1":2,"2":1,"3":3}' ] );
+	scpo_unit_check( "$method: unchanged nonmonotonic display order can be saved", $r->success && 1 === $wpdb->writes );
+	scpo_unit_reset();
+	$wpdb->rows = [ [ 1, 11 ], [ 2, 12 ], [ 3, 13 ] ];
+	$r = scpo_unit_ajax( $method, [ 'order' => 'item[]=3&item[]=1&item[]=2', 'original_order' => 'item[]=1&item[]=2&item[]=3', 'original_values' => '{"1":1,"2":2,"3":3}' ] );
+	scpo_unit_check( "$method: harmless renumbering preserves the snapshot order", $r->success && 1 === $wpdb->writes );
+	scpo_unit_reset();
+	$wpdb->rows = [ [ 1, 2 ], [ 2, 1 ], [ 3, 3 ] ];
+	$r = scpo_unit_ajax( $method, [ 'order' => 'item[]=3&item[]=1&item[]=2', 'original_values' => '{"1":1,"2":2,"3":3}' ] );
+	scpo_unit_check( "$method: an actual order reversal conflicts without writes", ! $r->success && 409 === $r->status && 0 === $wpdb->writes );
+	scpo_unit_reset();
+	$wpdb->rows = [ [ 1, 1 ], [ 2, 3 ], [ 3, 2 ] ];
+	$r = scpo_unit_ajax( $method, [ 'order' => 'item[]=2&item[]=1&item[]=3', 'original_values' => '{"1":1,"2":2,"3":2}' ] );
+	scpo_unit_check( "$method: quick-add normalization may split a tied snapshot group", $r->success && 1 === $wpdb->writes );
+	foreach ( [ 'bad json', '{"1":1}', '{"1":1,"2":2,"3":3,"4":4}', '{"1":1,"2":"2","3":3}', '[]' ] as $bad ) {
+		scpo_unit_reset();
+		$r = scpo_unit_ajax( $method, [ 'order' => 'item[]=2&item[]=1', 'original_values' => $bad ] );
+		scpo_unit_check( "$method: malformed/incomplete snapshot is refused: $bad", ! $r->success && 0 === $wpdb->writes );
+	}
+	scpo_unit_reset();
+	$wpdb->rows = [ [ 1, 2 ], [ 2, 1 ], [ 3, 3 ] ];
+	$r = scpo_unit_ajax( $method, [ 'order' => 'item[]=2&item[]=1&item[]=3', 'original_values' => '{"1":1,"2":2,"3":3}' ] );
+	scpo_unit_check( "$method: snapshot retry after lost success is idempotent", $r->success && 0 === $wpdb->writes );
+}
+
 scpo_unit_reset();
 $wpdb->rows = [ [ 1, 1 ], [ 2, 2 ], [ 3, 3 ] ];
 $r = scpo_unit_ajax( 'scpo_ajax_set_position', [ 'id' => 2, 'position' => 1, 'original_position' => '3' ] );
@@ -218,6 +276,30 @@ foreach ( [ 'write failure', 'read failure', 'option failure', 'success', 'zero 
 	scpo_unit_check( "reset: $scenario response", $expect_success === $r->success );
 	scpo_unit_check( "reset: $scenario preserves settings unless successful", $expect_success === empty( get_option( 'scporder_options' )['objects'] ) );
 	if ( 'read failure' === $scenario ) { scpo_unit_check( 'reset read failure performs no writes', 0 === $wpdb->writes ); }
+}
+
+if ( method_exists( 'SCPO_Engine', 'order_snapshot_matches' ) ) {
+	$matcher = new ReflectionMethod( 'SCPO_Engine', 'order_snapshot_matches' );
+	if ( PHP_VERSION_ID < 80100 ) { $matcher->setAccessible( true ); }
+	$profiles = [];
+	foreach ( [ -1, 0, 1, null ] as $a ) {
+		foreach ( [ -1, 0, 1, null ] as $b ) {
+			foreach ( [ -1, 0, 1, null ] as $c ) { $profiles[] = [ 1 => $a, 2 => $b, 3 => $c ]; }
+		}
+	}
+	$correct = true;
+	foreach ( $profiles as $expected ) {
+		foreach ( $profiles as $actual ) {
+			$inversion = false;
+			foreach ( $expected as $i => $left ) {
+				foreach ( $expected as $j => $right ) {
+					if ( (int) $left < (int) $right && (int) $actual[$i] > (int) $actual[$j] ) { $inversion = true; }
+				}
+			}
+			if ( $matcher->invoke( $scporder, $expected, $actual ) !== ! $inversion ) { $correct = false; }
+		}
+	}
+	scpo_unit_check( '4096 snapshots with ties, negatives, zero, and NULL agree with pairwise order reversals', $correct );
 }
 
 scpo_unit_reset();

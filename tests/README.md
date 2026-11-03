@@ -2,12 +2,15 @@
 
 After every implementation increment, install and test it on `local-wp`.
 `npm run test:local` builds the zip, installs/activates it, runs the WordPress,
-transaction, HTTP, and full Chrome suites, and restores ordering/settings even
+transaction, scratch-engine compatibility, HTTP, and full Chrome suites, and restores ordering/settings even
 when a suite fails. Restoration verifies post/term identifiers, order values,
 and plugin options against the snapshot, failing if fixtures remain.
 It leaves the new plugin build installed. Set `SCPO_WP` to
 a single executable wrapper that supplies your PHP binary, WP-CLI, site path,
 and local database socket; set `SCPO_SITE`, `SCPO_MU_DIR`, and `SCPO_LOG` as below.
+Set `SCPO_USER` when your administrator ID is not 1. Set `SCPO_TEST_WOO=1`
+to add product-category browser checks when WooCommerce is active and its
+`product_cat` taxonomy is enabled with several top-level categories and a subtree.
 Set `SCPO_PUPPETEER` if Puppeteer Core is installed outside this checkout.
 Run this only against a development site. Logs and snapshots go to a unique
 temporary directory printed by the runner.
@@ -24,6 +27,19 @@ release. These tests supplement the real-site suites below.
 HTTP failures in Chrome against both source and minified assets. It needs
 `puppeteer-core` and Chrome, but no WordPress site or cookies. Set
 `SCPO_PUPPETEER` to an absolute module entry path if installed outside this repo.
+
+`compatibility.php` tests real InnoDB/MyISAM scratch tables, including 2,501-row
+saves, hidden engine metadata, caller transactions, simultaneous sessions, and
+injected mid-statement errors and killed queries. Set `SCPO_COMPAT_HOST` to
+`localhost:/path/to/private/mariadb.sock` for an isolated MariaDB server with an
+empty `scpo_compat` database, local root access without a password, and networking
+disabled; that mode also covers Aria. Never point that override at production. These development-only checks require
+permission to create/drop scratch tables and triggers and to interrupt their own
+database sessions. They do not create database accounts or grant permissions.
+
+The rollback-based `regression.php` suite requires InnoDB content tables. For
+browser/HTTP tests on MyISAM or mixed content tables, use a full development-site
+database backup in addition to the order snapshot and restore it afterward.
 
 All suites return a nonzero exit status on failed assertions. Always restore the
 snapshot after browser tests, including when they fail.

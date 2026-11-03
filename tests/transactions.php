@@ -81,7 +81,9 @@ try {
 
 	$wpdb->query( "ALTER TABLE $table ENGINE=MyISAM" );
 	$result = $write( $original, $before );
-	$check( 'nontransactional engine is rejected without data changes', is_wp_error( $result ) && $before === $read() );
+	$check( 'MyISAM compatibility saves the complete order', ! is_wp_error( $result ) && $original === $read() );
+	$result = $write( [ 1 => 777 ], $before );
+	$check( 'MyISAM stale snapshot is rejected without changes', is_wp_error( $result ) && $original === $read() );
 } catch ( Throwable $error ) {
 	$check( $error->getMessage(), false );
 } finally {

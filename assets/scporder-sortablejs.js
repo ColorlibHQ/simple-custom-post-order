@@ -42,6 +42,16 @@
 	var vars = window.scporder_vars || {};
 	var strings = vars.i18n || {};
 
+	// refresh() numbers the list in the order WordPress renders it, just before
+	// it renders, so the saved values rise down the page. When they don't, a
+	// theme or another plugin sorted this list itself (e.g. a pre_get_posts hook
+	// forcing date order): saving would make that order the custom order, and
+	// the list would still look unchanged after a reload.
+	if ( ! shownInSavedOrder( sortableRows() ) ) {
+		showOrderNotice( strings.notInOrder || 'Drag and drop is turned off here: this list is not shown in its custom order, so your theme or another plugin is sorting it. Saving would replace the custom order with that order. Remove the code that sorts this admin list (for example a pre_get_posts or get_terms filter) to reorder again.' );
+		return;
+	}
+
 	var REQUEST_TIMEOUT = 20000; // ms before a hung save counts as a network failure
 
 	var draggedKids = [];   // subtree travelling with the row currently being dragged
@@ -241,6 +251,7 @@
 				// Quick Edit and newly added terms refresh the clean list's baseline.
 				if ( ! unsavedOrder && ! saving && ! pendingSave && ! isDragging && ! grabbed ) {
 					savedOrder = serializeOrder();
+					savedValues = readOrderValues();
 				}
 			}
 		} ).observe( list, { childList: true } );
@@ -587,6 +598,33 @@
 		);
 	}
 
+	/** Whether the rows' saved values rise in display order; true when unknown. */
+	function shownInSavedOrder( rows ) {
+		var previous = null;
+		for ( var i = 0; i < rows.length; i++ ) {
+			var marker = rows[ i ].querySelector( '.scpo-order-snapshot' );
+			var raw = marker && marker.getAttribute( 'data-value' );
+			if ( ! /^-?\d+$/.test( raw || '' ) ) {
+				return true;
+			}
+			if ( null !== previous && Number( raw ) < previous ) {
+				return false;
+			}
+			previous = Number( raw );
+		}
+		return true;
+	}
+
+	function showOrderNotice( message ) {
+		var table = list.parentNode;
+		var notice = document.createElement( 'div' );
+		notice.className = 'notice notice-warning inline scpo-order-notice';
+		var p = document.createElement( 'p' );
+		p.textContent = message;
+		notice.appendChild( p );
+		table.parentNode.insertBefore( notice, table );
+	}
+
 	function sortableRows() {
 		return Array.prototype.filter.call( list.children, isSortableRow );
 	}
@@ -698,7 +736,35 @@
 		return pairs.join( '&' );
 	}
 
+	// A value snapshot is independent of how a theme/plugin arranged the rows.
+	// Older server markup keeps using the legacy order-only protocol.
+	function readOrderValues() {
+		var values = {};
+		var rows = sortableRows();
+		for ( var i = 0; i < rows.length; i++ ) {
+			var marker = rows[ i ].querySelector( '.scpo-order-snapshot' );
+			if ( ! marker ) { return null; }
+			var raw = marker.getAttribute( 'data-value' );
+			if ( raw !== 'null' && ! /^-?\d+$/.test( raw || '' ) ) { return null; }
+			values[ rows[ i ].id.replace( /^.*-/, '' ) ] = raw === 'null' ? null : Number( raw );
+		}
+		return rows.length ? values : null;
+	}
+
+	function acceptOrderValues( values ) {
+		savedValues = values && typeof values === 'object' ? values : null;
+		if ( ! savedValues ) { return; }
+		sortableRows().forEach( function ( row ) {
+			var id = row.id.replace( /^.*-/, '' );
+			var marker = row.querySelector( '.scpo-order-snapshot' );
+			if ( marker && Object.prototype.hasOwnProperty.call( savedValues, id ) ) {
+				marker.setAttribute( 'data-value', String( savedValues[ id ] ) );
+			}
+		} );
+	}
+
 	var savedOrder = serializeOrder();
+	var savedValues = readOrderValues();
 	var unsavedOrder = false;
 	function warnBeforeLeaving( event ) {
 		event.preventDefault();
@@ -869,6 +935,7 @@
 			body.set( 'action', action );
 			body.set( 'order', order );
 			body.set( 'original_order', savedOrder );
+			if ( savedValues ) { body.set( 'original_values', JSON.stringify( savedValues ) ); }
 			body.set( 'nonce', vars.nonce || '' );
 			body = body.toString();
 		} catch ( e ) {
@@ -881,6 +948,7 @@
 				var r = parseReply( res.text );
 				return {
 					ok: !! ( res.ok && r.json && r.json.success ),
+					values: r.json && r.json.data && r.json.data.order_values,
 					staleNonce: r.staleNonce,
 					reload: !! ( r.json && r.json.data && r.json.data.reload ),
 					message: r.json && r.json.data && typeof r.json.data.message === 'string' ? r.json.data.message : '',
@@ -890,6 +958,7 @@
 				function ( r ) {
 					if ( r.ok ) {
 						savedOrder = order;
+						acceptOrderValues( r.values );
 						finishSave( true );
 						return;
 					}

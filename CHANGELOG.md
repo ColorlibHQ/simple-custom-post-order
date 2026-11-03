@@ -5,6 +5,31 @@ WordPress.org-formatted history lives in [`readme.txt`](readme.txt); this file m
 recent releases in [Keep a Changelog](https://keepachangelog.com/) style and follows
 [Semantic Versioning](https://semver.org/).
 
+## [2.8.12] - 2026-11-03
+
+Fixes the remaining "The order changed in another window or request" reports,
+WooCommerce product category ordering, and MyISAM/Aria sites that could not
+reorder at all since 2.8.10. Tested through five private betas with the
+reporters.
+
+### Fixed
+- **WooCommerce product categories snapped back after a drag.** A drag started on WooCommerce's ☰ handle ran WooCommerce's sorter and ours at once: ours saved the pre-move order and showed "Order saved", WooCommerce wrote its own `order` meta, and the list reverted on reload (2.8.11 reported "The order changed in another window" instead). WooCommerce's `woocommerce_term_ordering` script is now dequeued wherever this plugin loads its sorter (reported by simon_a6).
+- **WooCommerce Product Categories widget ("Category order") showed an old order.** It sorts by `orderby=meta_value_num, meta_key=order` directly, without the `force_menu_order_sort` flag WooCommerce's other paths set, and that meta is no longer updated. A `meta_key=order` meta sort on WooCommerce's sortable taxonomies (`woocommerce_sortable_taxonomies`, `pa_*`) now gets the manual order; meta sorts on any other key or taxonomy are still respected (reported by simon_a6).
+- **WooCommerce menu-order term queries lost the custom SQL sort** after WordPress parsed the meta ordering, so ID-only and limited category queries (`fields=ids`, `number`) ignored `term_order` even though full object results were re-sorted in PHP.
+- **Lists sorted by a theme or another plugin** (for example an admin `pre_get_posts` hook forcing `orderby=date`, or a late `get_terms` re-sort) now turn drag and drop off with an explanatory notice instead of failing with "The order changed in another window or request" on every drag. Both engines check at load that the rows' saved values rise in display order, which `refresh()` guarantees for a list shown in its custom order (reported by Oscar J. Irún).
+- **False "order changed" conflicts.** Modern and Classic drags send a snapshot of each rendered row's saved value (`original_values`) and the server compares it, instead of assuming the display order matches the numeric database order. Real concurrent changes are still refused; harmless renumbering, quick-add normalization and a replayed save are accepted. Saves return the resulting values so queued moves and retries build on them. Older clients keep the previous protocol.
+- **MyISAM and MariaDB Aria sites can reorder again** without converting any table. Since 2.8.10 they got "Safe reordering requires an InnoDB database table". These engines, and tables whose engine the host does not report, now use a single guarded `UPDATE` that compares the whole read snapshot before writing; InnoDB keeps its transaction/savepoint path. Guarded writes respect a caller's transaction, need no `LOCK TABLES` privilege, refuse oversized requests and signed-INT overflow before writing, and invalidate every attempted row's cache when a save cannot be confirmed. MyISAM/Aria cannot roll back a server crash or a mid-statement failure; the plugin reports such a save as unconfirmed and asks for a reload.
+
+### Added
+- Enabled post types get `page-attributes` support, so the Query Loop block's *Order by* offers "Ascending by order" (`menu_order`) for custom post types (reported by kingcrymson). It also shows the Order field in the editor and Quick Edit. Filter `scpo_add_order_support` (default `true`) opts out.
+- Tools → Site Health → Info has a Simple Custom Post Order section: plugin version, the storage engine of both ordering tables, external object cache status, and whether a database drop-in is present. Drag errors say whether a conflict was detected at the browser snapshot or the database write.
+- Unsupported-engine errors (MEMORY, CSV, …) name the table and engine and explain the next step. Tables are never converted automatically.
+- Regression, browser and database-compatibility coverage for non-monotonic lists, snapshot validation, renumbering, repeated saves, hierarchical quick-add, mixed-engine transactions, NULL snapshots, large saves, mid-statement failures, the WooCommerce sorter and widget, and foreign-sorted lists.
+
+### Upgrade notes
+- WooCommerce's own `order` term meta is no longer updated by drags on product categories and attributes; every WooCommerce category list follows this plugin's order instead.
+- A list that another plugin or the theme sorts in the admin now shows a notice instead of drag handles. Remove that code to reorder it again.
+
 ## [2.8.11] - 2026-10-19
 
 ### Fixed

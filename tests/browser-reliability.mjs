@@ -59,6 +59,44 @@ try {
 		passed++;
 		await page.close();
 
+		const snapshot = await browser.newPage();
+		await snapshot.setContent( '<table class="posts"><tbody id="the-list"><tr id="post-1"><td><a class="row-title">One</a><span class="scpo-order-snapshot" data-value="2" hidden></span></td></tr><tr id="post-2"><td><a class="row-title">Two</a><span class="scpo-order-snapshot" data-value="5" hidden></span></td></tr><tr id="post-3"><td><a class="row-title">Three</a><span class="scpo-order-snapshot" data-value="9" hidden></span></td></tr></tbody></table>' );
+		await snapshot.evaluate( () => {
+			window.scporder_vars = { nonce: 'test' };
+			window.requests = [];
+			window.fetch = async ( url, init ) => {
+				window.requests.push( init.body );
+				const ids = new URLSearchParams( init.body ).get( 'order' ).split( '&' ).map( ( part ) => part.split( '=' )[1] );
+				const values = Object.fromEntries( ids.map( ( id, index ) => [ id, index + 1 ] ) );
+				return { ok: true, text: async () => JSON.stringify( { success: true, data: { order_values: values } } ) };
+			};
+		} );
+		await snapshot.addScriptTag( { path: asset( 'vendor/Sortable.min.js' ) } );
+		await snapshot.addScriptTag( { path: asset( 'scporder-sortablejs' + suffix + '.js' ) } );
+		for ( const id of [ 'post-3', 'post-2' ] ) {
+			await snapshot.focus( '#' + id + ' .scpo-handle' );
+			await snapshot.keyboard.press( 'Space' );
+			await snapshot.keyboard.press( 'ArrowUp' );
+			await snapshot.keyboard.press( 'Space' );
+			await snapshot.waitForFunction( ( count ) => window.requests.length === count, {}, id === 'post-3' ? 1 : 2 );
+			await snapshot.waitForSelector( '.scpo-toast--saved' );
+		}
+		assert.deepEqual( await snapshot.evaluate( () => JSON.parse( new URLSearchParams( window.requests[0] ).get( 'original_values' ) ) ), { 1: 2, 2: 5, 3: 9 } );
+		assert.deepEqual( await snapshot.evaluate( () => JSON.parse( new URLSearchParams( window.requests[1] ).get( 'original_values' ) ) ), { 1: 1, 2: 3, 3: 2 } );
+		passed += 2;
+		await snapshot.close();
+
+		// Values that fall down the page mean other code sorted the list.
+		const foreign = await browser.newPage();
+		await foreign.setContent( '<table class="posts"><tbody id="the-list"><tr id="post-1"><td><a class="row-title">One</a><span class="scpo-order-snapshot" data-value="2" hidden></span></td></tr><tr id="post-2"><td><a class="row-title">Two</a><span class="scpo-order-snapshot" data-value="1" hidden></span></td></tr></tbody></table>' );
+		await foreign.evaluate( () => { window.scporder_vars = { nonce: 'test', i18n: { notInOrder: 'Not in custom order.' } }; } );
+		await foreign.addScriptTag( { path: asset( 'vendor/Sortable.min.js' ) } );
+		await foreign.addScriptTag( { path: asset( 'scporder-sortablejs' + suffix + '.js' ) } );
+		assert.equal( await foreign.$eval( '.scpo-order-notice', ( el ) => el.textContent ), 'Not in custom order.' );
+		assert.equal( await foreign.$$eval( '#the-list .scpo-handle', ( els ) => els.length ), 0 );
+		passed += 2;
+		await foreign.close();
+
 		const column = await browser.newPage();
 		await column.setContent( '<input type="number" class="scpo-order-input" data-id="2" min="1" step="1" value="2">' );
 		await column.evaluate( () => {

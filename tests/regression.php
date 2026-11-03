@@ -89,7 +89,7 @@ function menu_orders( array $ids ): array {
 	return array_map( 'intval', $wpdb->get_results( "SELECT ID, menu_order FROM $wpdb->posts WHERE ID IN ($in)", OBJECT_K ) ? wp_list_pluck( $wpdb->get_results( "SELECT ID, menu_order FROM $wpdb->posts WHERE ID IN ($in)", OBJECT_K ), 'menu_order' ) : [] );
 }
 
-wp_set_current_user( 1 );
+wp_set_current_user( (int) ( getenv( 'SCPO_USER' ) ?: 1 ) );
 $engine = scpo_engine();
 $engine->register_settings(); // admin_init never fires under WP-CLI
 echo 'Engine: ' . ( $engine ? 'found' : 'MISSING' ) . ' — version ' . SCPORDER_VERSION . "\n";
@@ -192,6 +192,17 @@ if ( taxonomy_exists( 'product_cat' ) && function_exists( 'wc_change_pre_get_ter
 		wp_cache_flush();
 		$got = array_map( 'intval', get_terms( [ 'taxonomy' => 'product_cat', 'hide_empty' => false, 'fields' => 'ids' ] ) );
 		t( 'WooCommerce product categories follow the manual order (menu_order → meta sort)', $got === array_reverse( $pc ), json_encode( $got ) );
+		$limited = array_map( 'intval', get_terms( [ 'taxonomy' => 'product_cat', 'hide_empty' => false, 'fields' => 'ids', 'number' => 2, 'hierarchical' => false ] ) );
+		t( 'limited WooCommerce category query selects the first IDs in manual order', $limited === array_slice( array_reverse( $pc ), 0, 2 ), wp_json_encode( $limited ) );
+		// The legacy Product Categories widget ("Category order") asks for the
+		// `order` meta directly, without force_menu_order_sort. Give that meta
+		// the opposite order: the widget must still show ours.
+		foreach ( $pc as $i => $id ) {
+			update_term_meta( $id, 'order', $i + 1 );
+		}
+		wp_cache_flush();
+		$widget = array_map( 'intval', get_terms( [ 'taxonomy' => 'product_cat', 'hide_empty' => false, 'fields' => 'ids', 'orderby' => 'meta_value_num', 'meta_key' => 'order', 'menu_order' => false ] ) );
+		t( 'a direct WooCommerce order-meta query (Product Categories widget) follows the manual order', $widget === array_reverse( $pc ), wp_json_encode( $widget ) );
 		rollback();
 	}
 }
@@ -325,6 +336,20 @@ $r = ajax( 'update_menu_order', [ 'nonce' => $nonce, 'order' => "post[]={$ids[1]
 t( 'legacy bulk[]=edit entry no longer fails the batch', ! empty( $r['success'] ), json_encode( $r ) );
 rollback();
 
+begin();
+$ids = array_slice( page_order(), 0, 3 );
+$expected = [ $ids[0] => 2, $ids[1] => 1, $ids[2] => 3 ];
+foreach ( $expected as $id => $value ) { $wpdb->update( $wpdb->posts, [ 'menu_order' => $value ], [ 'ID' => $id ] ); clean_post_cache( $id ); }
+$payload = "post[]={$ids[2]}&post[]={$ids[0]}&post[]={$ids[1]}";
+$r = ajax( 'update_menu_order', [ 'nonce' => $nonce, 'order' => $payload, 'original_order' => "post[]={$ids[0]}&post[]={$ids[1]}&post[]={$ids[2]}", 'original_values' => wp_json_encode( $expected ) ] );
+t( 'value snapshots save an unchanged nonmonotonic displayed list', ! empty( $r['success'] ), wp_json_encode( $r ) );
+t( 'successful saves return exact values for the next snapshot', ! empty( $r['data']['order_values'] ) && array_map( 'intval', $r['data']['order_values'] ) == menu_orders( $ids ) );
+rollback();
+
+$debug = $engine->order_debug_information( [] );
+t( 'Site Health reports the installed plugin version', SCPORDER_VERSION === $debug['simple-custom-post-order']['fields']['version']['value'] );
+t( 'Site Health identifies both order tables', false !== strpos( $debug['simple-custom-post-order']['fields']['posts']['value'], $wpdb->posts ) && false !== strpos( $debug['simple-custom-post-order']['fields']['terms']['value'], $wpdb->terms ) );
+
 if ( has_method( 'parse_order_ids' ) ) {
 	$big = implode( '&', array_map( function ( $i ) { return 'post[]=' . $i; }, range( 1, 1500 ) ) );
 	t( 'payload past max_input_vars (1500 rows) parses completely', 1500 === count( scpo_private( 'parse_order_ids', $big ) ) );
@@ -352,7 +377,7 @@ wp_set_current_user( $sub );
 $ids = array_slice( page_order(), 0, 2 );
 $r   = ajax( 'update_menu_order', [ 'nonce' => wp_create_nonce( 'scporder_nonce_action' ), 'order' => "post[]={$ids[1]}&post[]={$ids[0]}" ] );
 t( 'author cannot reorder pages they cannot edit (IDOR guard)', is_array( $r ) && empty( $r['success'] ) );
-wp_set_current_user( 1 );
+wp_set_current_user( (int) ( getenv( 'SCPO_USER' ) ?: 1 ) );
 rollback();
 
 /* ------------------------------------------------------------------ */
@@ -698,7 +723,7 @@ if ( $sub ) {
 	t( 'a subscriber cannot dismiss the site-wide setup notice', ! get_option( 'scporder_notice' ) );
 	remove_all_filters( 'wp_doing_ajax' );
 	rollback();
-	wp_set_current_user( 1 );
+	wp_set_current_user( (int) ( getenv( 'SCPO_USER' ) ?: 1 ) );
 }
 
 /* Failure injection: exercise the real wpdb boundary without persisting writes. */

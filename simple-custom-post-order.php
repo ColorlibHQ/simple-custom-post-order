@@ -3,7 +3,7 @@
  * Plugin Name: Simple Custom Post Order
  * Plugin URI: https://wordpress.org/plugins/simple-custom-post-order/
  * Description: Order posts, pages, custom post types, and taxonomies with a simple drag and drop interface.
- * Version: 2.8.11
+ * Version: 2.8.12
  * Author: Colorlib
  * Author URI: https://colorlib.com/
  * Requires at least: 6.2
@@ -39,7 +39,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 define( 'SCPORDER_URL', plugins_url( '', __FILE__ ) );
 define( 'SCPORDER_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SCPORDER_VERSION', '2.8.11' );
+define( 'SCPORDER_VERSION', '2.8.12' );
 
 $scporder = new SCPO_Engine();
 
@@ -72,7 +72,13 @@ class SCPO_Engine {
 		add_filter( 'get_next_post_where', array( $this, 'scporder_next_post_where' ), 10, 5 );
 		add_filter( 'get_next_post_sort', array( $this, 'scporder_next_post_sort' ), 10, 2 );
 
+		add_filter( 'post_row_actions', [ $this, 'add_order_snapshot' ], 10, 2 );
+		add_filter( 'page_row_actions', [ $this, 'add_order_snapshot' ], 10, 2 );
+		add_filter( 'tag_row_actions', [ $this, 'add_order_snapshot' ], 10, 2 );
+		add_filter( 'debug_information', [ $this, 'order_debug_information' ] );
+
 		add_filter( 'get_terms_orderby', array( $this, 'scporder_get_terms_orderby' ), 10, 3 );
+		add_filter( 'terms_clauses', [ $this, 'scporder_terms_clauses' ], 100, 3 );
 		// `wp_get_object_terms` passes $args as the 4th arg, `get_terms` as the 3rd,
 		// so each hook gets its own thin wrapper that hands $args to the sorter.
 		add_filter( 'wp_get_object_terms', array( $this, 'scporder_get_object_terms' ), 10, 4 );
@@ -86,6 +92,9 @@ class SCPO_Engine {
 		add_action( 'wp_ajax_scporder_dismiss_notices', array( $this, 'dismiss_notices' ) );
 
 		add_filter( 'scpo_post_types_args', array( $this, 'scpo_filter_post_types' ), 10, 2 );
+
+		// After every init-time register_post_type(), so custom types are covered.
+		add_action( 'wp_loaded', array( $this, 'add_order_support' ) );
 
 		// Seed the order of newly enabled types once the option is written, rather
 		// than from inside the sanitize callback (see seed_newly_enabled()).
@@ -440,6 +449,11 @@ class SCPO_Engine {
 			add_action( 'admin_print_styles', [ $this, 'print_scpo_style' ] );
 		}
 
+		// One sorter per list. WooCommerce has its own for product categories and
+		// attributes; a drag started on its ☰ handle ran both, ours saved the
+		// pre-move order and the list snapped back on reload.
+		add_action( 'admin_enqueue_scripts', [ $this, 'dequeue_competing_sorters' ], 100 );
+
 		// Localized for both paths (the jQuery version simply ignores i18n).
 		wp_localize_script( 'scporderjs', 'scporder_vars', [
 			'ajax_url' => $this->get_ajax_url(),
@@ -467,6 +481,7 @@ class SCPO_Engine {
 				'retry'        => __( 'Retry', 'simple-custom-post-order' ),
 				'dismiss'      => __( 'Dismiss', 'simple-custom-post-order' ),
 				'reload'       => __( 'Reload list', 'simple-custom-post-order' ),
+				'notInOrder'   => __( 'Drag and drop is turned off here: this list is not shown in its custom order, so your theme or another plugin is sorting it. Saving would replace the custom order with that order. Remove the code that sorts this admin list (for example a pre_get_posts or get_terms filter) to reorder again.', 'simple-custom-post-order' ),
 			],
 		] );
 	}
@@ -931,10 +946,14 @@ class SCPO_Engine {
 	 *
 	 * @return array|WP_Error Transaction ownership and a private savepoint name.
 	 */
-	private function begin_order_transaction( string $table ) {
+	private function begin_order_transaction( string $table, string $engine ) {
 		global $wpdb;
-		if ( in_array( $this->table_engine( $table ), [ 'myisam', 'aria', 'memory', 'heap', 'csv', 'archive', 'mrg_myisam', 'merge', 'blackhole', 'federated', 'spider', 'connect', 'mroonga', 'sequence', 'oqgraph', 'sphinx' ], true ) ) {
-			return new WP_Error( 'scpo_transaction_unavailable', __( 'Safe reordering requires an InnoDB database table. Please contact your site administrator.', 'simple-custom-post-order' ) );
+		if ( in_array( $engine, [ 'memory', 'heap', 'csv', 'archive', 'mrg_myisam', 'merge', 'blackhole', 'federated', 'spider', 'connect', 'mroonga', 'sequence', 'oqgraph', 'sphinx' ], true ) ) {
+			return new WP_Error( 'scpo_transaction_unavailable', sprintf(
+				/* translators: 1: database table name, 2: storage engine name. */
+				__( 'Cannot safely reorder: the %1$s table uses %2$s. Ask your host or database administrator to back up the database and convert this table to InnoDB.', 'simple-custom-post-order' ),
+				$table, $engine
+			) );
 		}
 
 		static $sequence = 0;
@@ -952,13 +971,10 @@ class SCPO_Engine {
 	/**
 	 * Lowercase storage engine of a table, or '' when it cannot be determined.
 	 *
-	 * Only a positively identified non-transactional engine blocks a save. In
-	 * 2.8.10 an empty answer was treated as "not InnoDB", which refused every
-	 * reorder on sites whose tables are InnoDB but whose information_schema
-	 * lookup comes back empty (restricted metadata access, DB proxies, db.php
-	 * drop-ins) — reported on the forum as "Safe reordering requires an InnoDB
-	 * database table". SHOW TABLE STATUS is tried as a fallback; if both are
-	 * silent the save proceeds inside START TRANSACTION as on InnoDB.
+	 * The fallback supports hosts with restricted information_schema access.
+	 * MyISAM, Aria, and unknown metadata use a single guarded UPDATE instead
+	 * of assuming transaction support; known transactional engines keep their
+	 * existing transaction/savepoint path.
 	 *
 	 * @param string $table Table name.
 	 * @return string
@@ -1006,7 +1022,7 @@ class SCPO_Engine {
 	 * @param array  $values       Map of ID => new order value.
 	 * @param string $taxonomy     Taxonomy, when writing terms (see invalidate_order_cache()).
 	 * @param array  $current      Optional map of ID => current value; unchanged rows are skipped.
-	 * @return int[]|WP_Error IDs written, or a rolled-back update/conflict.
+	 * @return int[]|WP_Error IDs written, or a failed/unconfirmed update.
 	 */
 	private function write_order_values( string $table, string $id_column, string $order_column, array $values, string $taxonomy = '', array $current = [] ) {
 		global $wpdb;
@@ -1027,7 +1043,13 @@ class SCPO_Engine {
 			return [];
 		}
 
-		$transaction = $this->begin_order_transaction( $table );
+		$engine = $this->table_engine( $table );
+		// Unknown metadata must not assume that multi-batch writes can roll back.
+		if ( in_array( $engine, [ 'myisam', 'aria', '' ], true ) ) {
+			return $this->write_guarded_order_values( $table, $id_column, $order_column, $changed, $taxonomy, $current );
+		}
+
+		$transaction = $this->begin_order_transaction( $table, $engine );
 		if ( is_wp_error( $transaction ) ) {
 			return $transaction;
 		}
@@ -1097,6 +1119,94 @@ class SCPO_Engine {
 		$this->invalidate_order_cache( $table, $ids, $taxonomy );
 
 		return $ids;
+	}
+
+	/**
+	 * Compatibility writer for MyISAM/Aria and unavailable engine metadata.
+	 *
+	 * Check the entire calculation snapshot and write in ONE SQL statement.
+	 * The aggregate and LIMIT force materialization despite derived-table merging,
+	 * avoiding target-table/derived-merge errors. FOR UPDATE requests current
+	 * reads if the unknown engine turns out to be InnoDB. MyISAM/Aria use their
+	 * statement table locks. No LOCK TABLES privilege or implicit commit is used.
+	 *
+	 * Nontransactional engines still cannot undo a killed/partially failed
+	 * statement or recover atomically from a server crash. Never claim rollback,
+	 * never split this write into batches, and invalidate every attempted row
+	 * when the outcome is uncertain. SQL values stay in the signed INT range of
+	 * WordPress's order columns so strict/non-strict SQL modes cannot truncate.
+	 *
+	 * @return int[]|WP_Error IDs written, or a conflict/unconfirmed save.
+	 */
+	private function write_guarded_order_values( string $table, string $id_column, string $order_column, array $changed, string $taxonomy, array $current ) {
+		global $wpdb;
+
+		foreach ( $changed as $value ) {
+			if ( $value < -2147483648 || $value > 2147483647 ) {
+				return new WP_Error( 'scpo_order_out_of_range', __( 'The requested order is outside the supported range. Reload the list before trying again.', 'simple-custom-post-order' ) );
+			}
+		}
+
+		// Direct callers may omit a snapshot; capture any missing target rows.
+		$missing = array_diff_key( $changed, $current );
+		if ( $missing ) {
+			$in = implode( ', ', array_fill( 0, count( $missing ), '%d' ) );
+			$rows = $wpdb->get_results( $wpdb->prepare( "SELECT $id_column, $order_column FROM $table WHERE $id_column IN ($in)", array_keys( $missing ) ), ARRAY_N );
+			if ( $wpdb->last_error || ! is_array( $rows ) ) {
+				return new WP_Error( 'scpo_order_read_failed', __( 'Could not read the current order. Please try again.', 'simple-custom-post-order' ) );
+			}
+			$found = array_column( $rows, 1, 0 );
+			if ( count( $found ) !== count( $missing ) ) { return $this->order_conflict(); }
+			$current += $found;
+		}
+
+		ksort( $current, SORT_NUMERIC );
+		$checks = '';
+		$args = [];
+		foreach ( $current as $id => $value ) {
+			$checks .= " WHEN %d THEN ($order_column " . ( null === $value ? 'IS NULL)' : '<=> %d)' );
+			$args[] = $id;
+			if ( null !== $value ) { $args[] = (int) $value; }
+		}
+		$snapshot_in = implode( ', ', array_fill( 0, count( $current ), '%d' ) );
+		$args = array_merge( $args, array_keys( $current ) );
+		$cases = '';
+		foreach ( $changed as $id => $value ) {
+			$cases .= ' WHEN %d THEN %d';
+			$args[] = $id;
+			$args[] = $value;
+		}
+		$target_in = implode( ', ', array_fill( 0, count( $changed ), '%d' ) );
+		$args[] = count( $current );
+		$args[] = count( $current );
+		$args = array_merge( $args, array_keys( $changed ) );
+		$sql = $wpdb->prepare(
+			"UPDATE $table AS scpo_target
+			CROSS JOIN (
+				SELECT COUNT(*) AS scpo_count, SUM(CASE $id_column{$checks} ELSE 0 END) AS scpo_match
+				FROM (SELECT $id_column, $order_column FROM $table WHERE $id_column IN ($snapshot_in)
+					ORDER BY $id_column LIMIT 18446744073709551615 FOR UPDATE) AS scpo_snapshot
+			) AS scpo_guard
+			SET scpo_target.$order_column = CASE scpo_target.$id_column{$cases} ELSE scpo_target.$order_column END
+			WHERE scpo_guard.scpo_count = %d AND scpo_guard.scpo_match = %d AND scpo_target.$id_column IN ($target_in)",
+			$args
+		);
+
+		$suppressed = $wpdb->suppress_errors( true );
+		$packet = (int) $wpdb->get_var( 'SELECT @@max_allowed_packet' );
+		$wpdb->suppress_errors( $suppressed );
+		$packet = $packet > 0 ? $packet : 1048576;
+		if ( strlen( $sql ) + 1024 > $packet ) {
+			return new WP_Error( 'scpo_order_too_large', __( 'This order is too large to save in one safe database request. Reduce the number of items shown and try again, or contact your site administrator.', 'simple-custom-post-order' ) );
+		}
+
+		$result = $wpdb->query( $sql ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- prepared above; identifiers are internal.
+		$this->invalidate_order_cache( $table, false === $result || 0 === $result ? array_keys( $current ) : array_keys( $changed ), $taxonomy );
+		if ( false === $result ) {
+			return new WP_Error( 'scpo_order_write_failed', __( 'Could not save the complete order. Reload the list to check its current order before trying again.', 'simple-custom-post-order' ) );
+		}
+		if ( 0 === $result ) { return $this->order_conflict(); }
+		return array_keys( $changed );
 	}
 
 	/**
@@ -1215,6 +1325,40 @@ class SCPO_Engine {
 	}
 
 	/**
+	 * Keep the value rendered with each row, including AJAX-added/replaced rows.
+	 * Appending to an existing action avoids adding a visible action separator.
+	 * No extra database reads: these are the objects used to render the list.
+	 */
+	public function add_order_snapshot( array $actions, $object ): array {
+		$is_post = $object instanceof WP_Post;
+		if ( $is_post ) {
+			if ( ! in_array( $object->post_type, $this->get_scporder_options_objects(), true ) ) { return $actions; }
+			$value = $object->menu_order;
+		} else {
+			if ( ! $object instanceof WP_Term || ! in_array( $object->taxonomy, $this->get_scporder_options_tags(), true ) || ! property_exists( $object, 'term_order' ) ) { return $actions; }
+			$value = $object->term_order;
+		}
+		$value = null === $value ? 'null' : (string) (int) $value;
+		$key = $actions ? array_keys( $actions )[0] : 'scpo_snapshot';
+		$actions[ $key ] = ( $actions[ $key ] ?? '' ) . '<span class="scpo-order-snapshot" data-value="' . esc_attr( $value ) . '" hidden></span>';
+		return $actions;
+	}
+
+	/** Read-only support diagnostics, available in Tools > Site Health > Info. */
+	public function order_debug_information( array $info ): array {
+		global $wpdb;
+		$fields = [
+			'version' => [ 'label' => __( 'Plugin version', 'simple-custom-post-order' ), 'value' => SCPORDER_VERSION ],
+			'posts' => [ 'label' => __( 'Posts table storage engine', 'simple-custom-post-order' ), 'value' => $wpdb->posts . ': ' . ( $this->table_engine( $wpdb->posts ) ?: __( 'Unknown (metadata unavailable)', 'simple-custom-post-order' ) ) ],
+			'terms' => [ 'label' => __( 'Terms table storage engine', 'simple-custom-post-order' ), 'value' => $wpdb->terms . ': ' . ( $this->table_engine( $wpdb->terms ) ?: __( 'Unknown (metadata unavailable)', 'simple-custom-post-order' ) ) ],
+			'object-cache' => [ 'label' => __( 'External object cache', 'simple-custom-post-order' ), 'value' => wp_using_ext_object_cache() ? __( 'Yes', 'simple-custom-post-order' ) : __( 'No', 'simple-custom-post-order' ) ],
+			'db-dropin' => [ 'label' => __( 'Database drop-in (db.php)', 'simple-custom-post-order' ), 'value' => file_exists( WP_CONTENT_DIR . '/db.php' ) ? __( 'Yes', 'simple-custom-post-order' ) : __( 'No', 'simple-custom-post-order' ) ],
+		];
+		$info['simple-custom-post-order'] = [ 'label' => 'Simple Custom Post Order', 'fields' => $fields ];
+		return $info;
+	}
+
+	/**
 	 * Shared drag-save handler for posts and terms.
 	 *
 	 * Reordering reuses the *existing* set of order values of the submitted rows
@@ -1287,29 +1431,6 @@ class SCPO_Engine {
 		}
 		$current = array_column( $current, 1, 0 );
 
-		if ( isset( $_POST['original_order'] ) ) {
-			$original = is_string( $_POST['original_order'] ) ? $this->parse_order_ids( wp_unslash( $_POST['original_order'] ) ) : [];
-			$original_set = $original;
-			$requested_set = $ids;
-			sort( $original_set );
-			sort( $requested_set );
-			if ( $original_set !== $requested_set ) {
-				wp_send_json_error( [ 'message' => __( 'The list has changed. Reload it before reordering.', 'simple-custom-post-order' ), 'reload' => true ], 409 );
-			}
-			$is_current_order = static function ( array $sequence ) use ( $current ): bool {
-				$previous = null;
-				foreach ( $sequence as $id ) {
-					$value = (int) $current[ $id ];
-					if ( null !== $previous && $value < $previous ) { return false; }
-					$previous = $value;
-				}
-				return true;
-			};
-			if ( ! $is_current_order( $original ) && ! $is_current_order( $ids ) ) {
-				wp_send_json_error( [ 'message' => $this->order_conflict()->get_error_message(), 'reload' => true ], 409 );
-			}
-		}
-
 		$values = array_map( 'intval', array_values( $current ) );
 		sort( $values );
 
@@ -1338,12 +1459,52 @@ class SCPO_Engine {
 			}
 		}
 
+		if ( isset( $_POST['original_values'] ) ) {
+			$expected = is_string( $_POST['original_values'] ) ? json_decode( wp_unslash( $_POST['original_values'] ), true ) : null;
+			if ( ! is_array( $expected ) || count( $expected ) !== count( $current ) ) {
+				wp_send_json_error( [ 'message' => __( 'The list has changed. Reload it before reordering.', 'simple-custom-post-order' ), 'reload' => true ], 409 );
+			}
+			$replay = true;
+			foreach ( $current as $id => $value ) {
+				if ( ! array_key_exists( $id, $expected ) || ( null !== $expected[ $id ] && ! is_int( $expected[ $id ] ) ) ) {
+					wp_send_json_error( [ 'message' => __( 'Invalid data.', 'simple-custom-post-order' ), 'reload' => true ], 400 );
+				}
+				if ( null === $value || (int) $value !== $new[ $id ] ) { $replay = false; }
+			}
+			if ( ! $this->order_snapshot_matches( $expected, $current ) && ! $replay ) {
+				wp_send_json_error( [ 'message' => $this->order_conflict()->get_error_message(), 'reload' => true, 'code' => 'scpo_order_conflict', 'stage' => 'browser_snapshot' ], 409 );
+			}
+		} else {
+			if ( isset( $_POST['original_order'] ) ) {
+				$original = is_string( $_POST['original_order'] ) ? $this->parse_order_ids( wp_unslash( $_POST['original_order'] ) ) : [];
+				$original_set = $original;
+				$requested_set = $ids;
+				sort( $original_set );
+				sort( $requested_set );
+				if ( $original_set !== $requested_set ) {
+					wp_send_json_error( [ 'message' => __( 'The list has changed. Reload it before reordering.', 'simple-custom-post-order' ), 'reload' => true ], 409 );
+				}
+				$is_current_order = static function ( array $sequence ) use ( $current ): bool {
+					$previous = null;
+					foreach ( $sequence as $id ) {
+						$value = (int) $current[ $id ];
+						if ( null !== $previous && $value < $previous ) { return false; }
+						$previous = $value;
+					}
+					return true;
+				};
+				if ( ! $is_current_order( $original ) && ! $is_current_order( $ids ) ) {
+					wp_send_json_error( [ 'message' => $this->order_conflict()->get_error_message(), 'reload' => true ], 409 );
+				}
+			}
+		}
+
 		// One batched write for the rows whose value actually changed, with the
 		// object-cache invalidation that raw writes need (see
 		// invalidate_order_cache(); for terms it resolves each term's taxonomy).
 		$result = $this->write_order_values( $table, $id_column, $column, $new, '', $current );
 		if ( is_wp_error( $result ) ) {
-			wp_send_json_error( [ 'message' => $result->get_error_message(), 'reload' => true ], 'scpo_order_conflict' === $result->get_error_code() ? 409 : 500 );
+			wp_send_json_error( [ 'message' => $result->get_error_message(), 'reload' => true, 'code' => $result->get_error_code(), 'stage' => 'database_write' ], 'scpo_order_conflict' === $result->get_error_code() ? 409 : 500 );
 		}
 
 		if ( $is_posts ) {
@@ -1352,7 +1513,32 @@ class SCPO_Engine {
 			do_action( 'scp_update_menu_order_tags' );
 		}
 
-		wp_send_json_success( [ 'message' => __( 'Order updated.', 'simple-custom-post-order' ) ] );
+		wp_send_json_success( [ 'message' => __( 'Order updated.', 'simple-custom-post-order' ), 'order_values' => $new ] );
+	}
+
+	/**
+	 * Compare the saved relative order, independent of the displayed row order.
+	 * Renumbering after an insert may change every value without changing the
+	 * order. Equal original values impose no order within that group, allowing
+	 * quick-add normalization to give tied rows distinct positions.
+	 */
+	private function order_snapshot_matches( array $expected, array $current ): bool {
+		asort( $expected, SORT_NUMERIC );
+		$previous = null;
+		$previous_max = null;
+		$group_max = null;
+		foreach ( $expected as $id => $value ) {
+			$value = (int) $value;
+			$order = (int) $current[ $id ];
+			if ( null !== $previous && $value !== $previous ) {
+				$previous_max = $group_max;
+				$group_max = null;
+			}
+			if ( null !== $previous_max && $order < $previous_max ) { return false; }
+			$group_max = null === $group_max ? $order : max( $group_max, $order );
+			$previous = $value;
+		}
+		return true;
 	}
 
 	/**
@@ -2536,7 +2722,7 @@ class SCPO_Engine {
 		// in pre_get_terms, flagging it with force_menu_order_sort. That query
 		// asked for the manual order, so on a taxonomy sorted here it gets ours —
 		// as it always did before 2.8.9.
-		if ( ! empty( $args['force_menu_order_sort'] ) ) {
+		if ( $this->is_woocommerce_order_request( $args ) ) {
 			return true;
 		}
 		if ( ! isset( $args['orderby'] ) ) {
@@ -2546,6 +2732,42 @@ class SCPO_Engine {
 			return false;
 		}
 		return in_array( strtolower( trim( $args['orderby'] ) ), [ '', 'name', 'id', 'term_id', 'slug', 'term_group', 'description', 'term_order', 'menu_order' ], true );
+	}
+
+	/**
+	 * Whether a term query asks for WooCommerce's manual order.
+	 *
+	 * Either WooCommerce rewrote a "menu order" query and flagged it with
+	 * force_menu_order_sort, or the caller asked for WooCommerce's `order` term
+	 * meta directly on one of its sortable taxonomies — the legacy Product
+	 * Categories widget does that for "Category order". Since 2.8.12 that meta
+	 * is no longer updated (WooCommerce's sorter is unloaded on our lists), so
+	 * such a query must get our order or it shows a stale one.
+	 *
+	 * @param array $args Term query args.
+	 * @return bool
+	 */
+	private function is_woocommerce_order_request( array $args ): bool {
+		if ( ! empty( $args['force_menu_order_sort'] ) ) {
+			return true;
+		}
+		if ( ! isset( $args['meta_key'], $args['orderby'] ) || 'order' !== $args['meta_key'] || ! is_string( $args['orderby'] ) ) {
+			return false;
+		}
+		if ( ! in_array( strtolower( trim( $args['orderby'] ) ), [ 'meta_value_num', 'meta_value' ], true ) ) {
+			return false;
+		}
+		$taxonomies = array_filter( (array) ( $args['taxonomy'] ?? [] ) );
+		if ( ! $taxonomies ) {
+			return false;
+		}
+		$sortable = (array) apply_filters( 'woocommerce_sortable_taxonomies', [ 'product_cat' ] );
+		foreach ( $taxonomies as $taxonomy ) {
+			if ( ! is_string( $taxonomy ) || ( ! in_array( $taxonomy, $sortable, true ) && 0 !== strpos( $taxonomy, 'pa_' ) ) ) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/**
@@ -2594,6 +2816,20 @@ class SCPO_Engine {
 		}
 
 		return '' !== $orderby ? 't.term_order, ' . $orderby : 't.term_order';
+	}
+
+	/**
+	 * Core parses meta ordering after get_terms_orderby, replacing its result.
+	 * Restore our primary sort after WooCommerce's terms_clauses callback (99).
+	 * This also covers ID-only and limited queries, which PHP cannot re-sort.
+	 */
+	public function scporder_terms_clauses( array $clauses, array $taxonomies, array $args ): array {
+		if ( ! $this->is_woocommerce_order_request( $args ) || empty( $clauses['orderby'] ) ) { return $clauses; }
+		$orderby = preg_replace( '/^ORDER BY\s+/i', '', $clauses['orderby'] );
+		if ( preg_match( '/(?:^|,)\s*t\.term_order\b/i', $orderby ) ) { return $clauses; }
+		$sorted = $this->scporder_get_terms_orderby( $orderby, $args, $taxonomies );
+		if ( $sorted !== $orderby ) { $clauses['orderby'] = 'ORDER BY ' . $sorted; }
+		return $clauses;
 	}
 
 	/**
@@ -2773,6 +3009,37 @@ class SCPO_Engine {
 		);
 
 		return array_values( array_diff( get_post_types( $args ), [ 'attachment' ] ) );
+	}
+
+	/**
+	 * Remove WooCommerce's term sorter (product_cat, pa_*) where ours is loaded.
+	 * Its handle column is hidden by WooCommerce's CSS until that script shows it.
+	 */
+	public function dequeue_competing_sorters(): void {
+		wp_dequeue_script( 'woocommerce_term_ordering' );
+	}
+
+	/**
+	 * Give enabled post types `page-attributes` support. The Query Loop block
+	 * always sends an explicit orderby (date by default), which pre_get_posts
+	 * respects, and offers "Ascending by order" only for types with this support
+	 * — so a custom post type sorted here had no way to show its manual order.
+	 * It also adds the Order field to the editor and Quick Edit.
+	 */
+	public function add_order_support(): void {
+		/**
+		 * Whether to add `page-attributes` support to enabled post types.
+		 *
+		 * @param bool $add Default true.
+		 */
+		if ( ! apply_filters( 'scpo_add_order_support', true ) ) {
+			return;
+		}
+		foreach ( $this->get_scporder_options_objects() as $post_type ) {
+			if ( post_type_exists( $post_type ) && ! post_type_supports( $post_type, 'page-attributes' ) ) {
+				add_post_type_support( $post_type, 'page-attributes' );
+			}
+		}
 	}
 
 	/**

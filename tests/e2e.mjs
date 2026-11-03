@@ -97,6 +97,8 @@ try {
 	ok( 'dragged row moved to the top', after[ 0 ] === before[ 3 ], after.slice( 0, 4 ).join( ',' ) );
 	const saves = ajax.filter( ( a ) => a.action === 'update-menu-order' );
 	ok( 'exactly one save request', saves.length === 1, String( saves.length ) );
+	const firstSnapshot = JSON.parse( new URLSearchParams( saves[0].body ).get( 'original_values' ) || 'null' );
+	ok( 'Modern sends a complete value snapshot', firstSnapshot && Object.keys( firstSnapshot ).length === before.length );
 	const first = after.slice( 0, 6 ).map( idNum );
 	ok( 'DB order matches the new DOM order', increasing( dbMenuOrders( first ) ), JSON.stringify( dbMenuOrders( first ) ) );
 	const inputs = await page.$$eval( '#the-list > tr[id] .scpo-order-input', ( is ) => is.slice( 0, 6 ).map( ( i ) => +i.value ) );
@@ -295,6 +297,24 @@ try {
 	await page.reload( { waitUntil: 'networkidle2' } );
 	ok( 'retried order persisted', JSON.stringify( ( await rowIds() ).slice( 0, 8 ) ) === JSON.stringify( shown.slice( 0, 8 ) ) );
 
+	/* ---------------- Hierarchical category quick-add ---------------- */
+	console.log( '\n== Category quick-add and renumbering ==' );
+	await page.goto( B + '/edit-tags.php?taxonomy=category', { waitUntil: 'networkidle2' } );
+	const categoryParent = await page.$eval( '#the-list tr.level-0', ( row ) => row.id.replace( /\D/g, '' ) );
+	const categoryName = 'scpo-beta-category-' + Date.now();
+	try {
+		await page.type( '#tag-name', categoryName );
+		await page.select( '#parent', categoryParent );
+		await page.click( '#addtag #submit' );
+		await page.waitForFunction( ( name ) => Array.from( document.querySelectorAll( '#the-list .row-title' ) ).some( ( el ) => el.textContent.trim().endsWith( name ) ), {}, categoryName );
+		const addedCategory = await page.$$eval( '#the-list > tr[id]', ( rows, name ) => rows.find( ( row ) => row.querySelector( '.row-title' )?.textContent.trim().endsWith( name ) ).id, categoryName );
+		await page.waitForSelector( '#' + addedCategory + ' .scpo-handle' );
+		await keyboardMove( addedCategory, [ 'ArrowDown' ] );
+		ok( 'new child category can move after normalization without reloading', await waitToast( 'saved' ) );
+	} finally {
+		wp( `$term=get_term_by("name",${ JSON.stringify( categoryName ) },"category"); if($term) wp_delete_term($term->term_id,"category"); echo 1;` );
+	}
+
 	/* ---------------- Tags ---------------- */
 	console.log( '\n== Tag list ==' );
 	await page.goto( B + '/edit-tags.php?taxonomy=post_tag', { waitUntil: 'networkidle2' } );
@@ -336,7 +356,70 @@ try {
 	ok( 'classic drag sends a save', !! cs );
 	after = await rowIds();
 	ok( 'classic drag stored the new order', increasing( dbMenuOrders( after.slice( 0, 5 ).map( idNum ) ) ) && after[ 0 ] !== before[ 0 ], after.slice( 0, 4 ).join( ',' ) );
+	const classicSave = ajax.find( ( a ) => a.action === 'update-menu-order' );
+	const classicSnapshot = classicSave && JSON.parse( new URLSearchParams( classicSave.body ).get( 'original_values' ) || 'null' );
+	ok( 'Classic sends a complete value snapshot', classicSnapshot && Object.keys( classicSnapshot ).length === before.length );
+	// Cached older row markup must omit the new field, rather than send an empty one.
+	await page.$$eval( '.scpo-order-snapshot', ( markers ) => markers.forEach( ( marker ) => marker.remove() ) );
+	before = await rowIds();
+	ajax.length = 0;
+	let legacyAlert = '';
+	const captureLegacyAlert = async ( dialog ) => { legacyAlert = dialog.message(); await dialog.dismiss(); };
+	page.on( 'dialog', captureLegacyAlert );
+	await mouseDrag( '#' + before[3] + ' .row-title', '#' + before[1] + ' .row-title', true );
+	await sleep( 1200 );
+	page.off( 'dialog', captureLegacyAlert );
+	const legacySave = ajax.find( ( a ) => a.action === 'update-menu-order' );
+	ok( 'Classic with older markup omits the value snapshot', legacySave && ! new URLSearchParams( legacySave.body ).has( 'original_values' ) );
+	ok( 'Classic with older markup still saves', legacyAlert === '' && increasing( dbMenuOrders( ( await rowIds() ).map( idNum ) ) ), legacyAlert );
+
 	wp( '$o=get_option("scporder_options"); $o["engine"]="sortable"; update_option("scporder_options",$o); echo 1;' );
+
+	if ( process.env.SCPO_TEST_WOO === '1' ) {
+		console.log( '\n== WooCommerce product categories ==' );
+		for ( const engine of [ 'sortable', 'classic' ] ) {
+			wp( `$o=get_option("scporder_options"); $o["engine"]="${ engine }"; update_option("scporder_options",$o); echo 1;` );
+			await page.goto( B + '/edit-tags.php?taxonomy=product_cat', { waitUntil: 'networkidle2' } );
+			ok( 'WooCommerce ' + engine + ' term sorter is not loaded alongside ours', ! ( await page.$( 'script[src*="term-ordering"]' ) ) );
+			const roots = await page.$$eval( '#the-list > tr.level-0', ( rows ) => rows.map( ( row ) => row.id ) );
+			const mover = roots[ roots.length - 1 ];
+			ajax.length = 0;
+			if ( engine === 'sortable' ) {
+				await keyboardMove( mover, [ 'ArrowUp' ] );
+				ok( 'WooCommerce Modern category move saves', await waitToast( 'saved' ) );
+				await keyboardMove( mover, [ 'ArrowDown' ] );
+				await page.waitForFunction( () => document.querySelector( '.scpo-toast--saved' ) && ! document.querySelector( '.scpo-toast--saving' ) );
+				ok( 'WooCommerce repeated Modern move saves', ajax.filter( ( a ) => a.action === 'update-menu-order-tags' ).length === 2 );
+			} else {
+				await mouseDrag( '#' + mover + ' .row-title', '#' + roots[ roots.length - 2 ] + ' .row-title', true );
+				await sleep( 1200 );
+				ok( 'WooCommerce Classic category move sends a value snapshot', ajax.some( ( a ) => a.action === 'update-menu-order-tags' && new URLSearchParams( a.body ).has( 'original_values' ) ) );
+			}
+			const shownCategories = await rowIds();
+			ok( 'WooCommerce ' + engine + ' values follow the displayed tree', increasing( dbTermOrders( shownCategories.map( idNum ) ) ) );
+			await page.reload( { waitUntil: 'networkidle2' } );
+			ok( 'WooCommerce ' + engine + ' category order survives reload', JSON.stringify( shownCategories ) === JSON.stringify( await rowIds() ) );
+		}
+		wp( '$o=get_option("scporder_options"); $o["engine"]="sortable"; update_option("scporder_options",$o); echo 1;' );
+	}
+
+	/* ---------------- List sorted by a theme / another plugin ---------------- */
+	console.log( '\n== List sorted by a theme or another plugin ==' );
+	const MU_SORT = ( process.env.SCPO_MU_DIR || '' ) + '/scpo-e2e-foreign-sort.php';
+	fs.writeFileSync( MU_SORT, "<?php add_action( 'pre_get_posts', function ( $q ) { if ( is_admin() && $q->is_main_query() && 'post' === $q->get( 'post_type' ) ) { $q->set( 'orderby', 'title' ); $q->set( 'order', 'DESC' ); } }, 20 );" );
+	try {
+		for ( const engine of [ 'sortable', 'classic' ] ) {
+			wp( `$o=get_option("scporder_options"); $o["engine"]="${ engine }"; update_option("scporder_options",$o); echo 1;` );
+			await page.goto( B + '/edit.php', { waitUntil: 'networkidle2' } );
+			ok( engine + ': a list sorted by other code shows the notice', !! ( await page.$( '.scpo-order-notice' ) ) );
+			ok( engine + ': a list sorted by other code cannot be dragged', 0 === ( await page.$$( '#the-list .scpo-handle' ) ).length && ! ( await page.$( '#the-list.ui-sortable' ) ) );
+		}
+	} finally {
+		fs.unlinkSync( MU_SORT );
+		wp( '$o=get_option("scporder_options"); $o["engine"]="sortable"; update_option("scporder_options",$o); echo 1;' );
+	}
+	await page.goto( B + '/edit.php', { waitUntil: 'networkidle2' } );
+	ok( 'a list in custom order shows no notice', ! ( await page.$( '.scpo-order-notice' ) ) );
 
 	/* ---------------- Settings form round-trip ---------------- */
 	console.log( '\n== Settings form ==' );
@@ -361,4 +444,5 @@ try {
 console.log( `\nE2E RESULT: ${ pass } passed, ${ fail } failed` );
 if ( failed.length ) console.log( 'Failed: ' + failed.join( '; ' ) );
 
-process.exitCode = fail > 0 ? 1 : 0;
+// Close completed test runners even if a browser library leaves an idle handle.
+process.exit( fail > 0 ? 1 : 0 );

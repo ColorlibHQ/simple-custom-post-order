@@ -4,7 +4,7 @@ Tags: post order, custom post order, sort posts, reorder posts, drag drop order
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 7.1
-Stable tag: 2.8.11
+Stable tag: 2.8.12
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -171,7 +171,7 @@ The plugin uses WordPress's native `menu_order` field for posts and pages, and a
 
 = Database Requirement =
 
-From 2.8.10, safe reordering requires InnoDB for the posts table and, when taxonomy sorting is enabled, the terms table. If a table uses another engine, ask your hosting provider to migrate it after taking a backup. The plugin reports unsupported storage and does not convert tables automatically. Since 2.8.11 the error only appears when the database positively reports a non-transactional engine such as MyISAM; if your host does not reveal the engine, saving proceeds normally.
+InnoDB, MyISAM, and MariaDB Aria ordering tables are supported. No table conversion is performed. InnoDB saves use transactions. MyISAM/Aria and hosts that hide engine metadata use one guarded UPDATE, with snapshot checking and no multi-batch writes. These nontransactional engines cannot roll back partial changes after a server crash, killed query, or mid-statement error; reload before retrying an unconfirmed save.
 
 = Automatic Installation =
 
@@ -226,6 +226,12 @@ No, the plugin automatically preserves WordPress's relevance-based sorting for s
 
 Yes, you can use Simple Custom Post Order to manually sort WooCommerce products, product categories, and product tags.
 
+When this plugin orders product categories or attributes, WooCommerce's own category sorter (the ☰ handle) is switched off so only one sorter saves the order.
+
+= How do I show the custom order in a Query Loop block? =
+
+The Query Loop block always sends its own sort, which the plugin respects. Select the block, and under *Order by* choose **Ascending by order**. Every post type enabled in Settings → SCPOrder offers that option. Archive templates that inherit the query use the custom order automatically.
+
 = Will it slow down my website? =
 
 No, the plugin is highly optimized. It only loads scripts on relevant admin pages and uses efficient database queries. There is no impact on front-end performance.
@@ -258,11 +264,15 @@ Yes. Go to Settings > SCPOrder and set the "Drag & Drop Engine" to "Classic". De
 
 Yes. As of 2.7.0 the save request is always sent same-origin, which fixes silent save failures behind reverse proxies, load balancers, non-standard ports, and HTTP/HTTPS or domain mismatches. Expired security tokens now also refresh and retry automatically.
 
+= Why is drag and drop turned off with a notice on one of my lists? =
+
+The list isn't shown in its custom order, so your theme or another plugin is sorting it, often with a `pre_get_posts` or `get_terms` filter in the admin. Saving there would replace your custom order with that order, so the plugin doesn't allow it. Remove or limit that code (for example, skip it in the admin) and drag and drop comes back.
+
 = What happens if another editor changes the order? =
 
-New drag requests include the order displayed before the move. If another request changed that order, the save is rejected and the Modern engine offers “Reload list”. Numeric moves also check the item’s original order value. Requests from older integrations without these fields retain their legacy behavior.
+New drag requests include the saved values of the displayed rows; older clients include their displayed order. If another request changed that order, the save is rejected and the Modern engine offers “Reload list”. Numeric moves also check the item’s original order value. Requests from older integrations without these fields retain their legacy behavior.
 
-Drag and numeric order saves use InnoDB transactions: a failure in one batch rolls back the operation’s earlier batches. Existing transactions are preserved with savepoints. The relevant posts or terms table must use InnoDB; the plugin reports unsupported storage and never converts tables automatically. An interrupted connection during commit can leave the outcome uncertain, so reload before retrying. Reset Order remains a separate operation; these transaction guarantees do not cover its settings update.
+On InnoDB, drag and numeric saves use transactions: a failed batch rolls back earlier batches and caller transactions are preserved with savepoints. MyISAM/Aria use a single guarded statement with the same snapshot checks, without converting tables or requiring explicit table-lock privileges. Large requests that cannot fit one statement are refused before writing. MyISAM/Aria cannot provide transactional rollback after server or mid-statement failures; an error can leave an uncertain or partially changed order, so reload before retrying. Reset Order's settings update is separate from its database write.
 
 The Modern engine warns before leaving while an order is unsaved. Once saving succeeds, the warning is removed.
 
@@ -321,6 +331,17 @@ Deactivating leaves everything in place, so reactivating restores your order. De
 3. Settings page - select the post types and taxonomies to sort
 
 == Changelog ==
+
+= 2.8.12 - 2026-11-03 =
+
+* Fixed WooCommerce product category drags that showed "Order saved" but snapped back on reload, or reported "The order changed in another window". WooCommerce's own category sorter (the ☰ handle) ran alongside ours; it is now switched off wherever this plugin orders the list.
+* Fixed the WooCommerce Product Categories widget set to "Category order" showing an old order. It now follows the custom order.
+* Fixed WooCommerce category queries that ask only for IDs or a limited number of categories ignoring the custom order.
+* When a theme or another plugin sorts an admin list itself (for example a `pre_get_posts` hook forcing date order), drag and drop is turned off on that list with a notice explaining why, instead of every drag failing with "The order changed in another window or request".
+* Fewer false "The order changed in another window" errors: saves now compare each row's saved value instead of assuming the list is shown in numeric order. Real changes made in another window are still caught.
+* MyISAM and MariaDB Aria sites can reorder again, without converting tables, using a single guarded database update. InnoDB keeps full transactions. On MyISAM/Aria a server crash mid-save cannot be rolled back; the plugin reports such a save as unconfirmed and asks you to reload.
+* Enabled post types now support Page Attributes, so the Query Loop block offers "Ascending by order" for custom post types too. Use the `scpo_add_order_support` filter to opt out.
+* Added a Simple Custom Post Order section to Tools > Site Health > Info (table engines, object cache, database drop-in) to help with support requests.
 
 = 2.8.11 - 2026-10-19 =
 
@@ -707,6 +728,9 @@ Note: full parent/child ordering (keeping a drag within its own level) is still 
 * Initial release
 
 == Upgrade Notice ==
+
+= 2.8.12 =
+Fixes WooCommerce category order (drags snapping back, the Product Categories widget), false "order changed in another window" errors, and reordering on MyISAM databases. Lists sorted by other code now show a notice. Query Loop can use the custom order.
 
 = 2.8.11 =
 Fixes "Safe reordering requires an InnoDB database table" on InnoDB sites, and drags in category-style (hierarchical) taxonomies being refused as conflicts after 2.8.10. Recommended for all 2.8.10 users.

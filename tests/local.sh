@@ -26,7 +26,7 @@ trap restore EXIT
 "$SCPO_WP" plugin install "$REPO_DIR/simple-custom-post-order.zip" --force --activate > "$TEST_ARTIFACTS/install.log" 2>&1
 "$SCPO_WP" eval-file tests/make-cookie.php | tail -1 > "$SCPO_COOKIE"
 failed=0
-for suite in regression transactions; do
+for suite in regression transactions compatibility; do
     if ! "$SCPO_WP" eval-file "tests/$suite.php" > "$TEST_ARTIFACTS/$suite.log" 2>&1; then failed=1; fi
     tail -3 "$TEST_ARTIFACTS/$suite.log"
 done

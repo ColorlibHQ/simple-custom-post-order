@@ -1,8 +1,15 @@
 # Releasing Simple Custom Post Order
 
-The prepared release is **2.8.11**, dated **2026-10-19**. Git tags use plain
-versions (`2.8.11`, without `v`), matching existing repository tags. If the
+The prepared release is **2.8.12**, dated **2026-11-03**. Git tags use plain
+versions (`2.8.12`, without `v`), matching existing repository tags. If the
 release date changes, update both changelogs before rebuilding.
+
+Private betas (`X.Y.Z-beta.N`) are built with `npx grunt build-archive`, renamed
+to `artifacts/simple-custom-post-order-X.Y.Z-beta.N.zip` with a `.sha256` file,
+and shared with reporters directly. They get no Git tag, no GitHub release and
+no SVN commit. 2.8.12 went through five such betas; when the final version
+ships, fold the beta changelog entries and Upgrade Notices into the one final
+entry.
 
 ## Validate the release
 
@@ -34,9 +41,9 @@ substitute GitHub's automatically generated source archive.
 
 ## WordPress.org SVN
 
-Use a separate SVN working copy. Check that `2.8.11` has not already been
+Use a separate SVN working copy. Check that `2.8.12` has not already been
 published. Follow WordPress.org's [tagging procedure](https://developer.wordpress.org/plugins/wordpress-org/how-to-use-subversion/):
-update `trunk`, copy it to `tags/2.8.11`, then commit both together.
+update `trunk`, copy it to `tags/2.8.12`, then commit both together.
 The [Stable tag](https://developer.wordpress.org/plugins/wordpress-org/how-your-readme-txt-works/)
 must match the tag directory. Never rewrite an already published tag.
 
@@ -61,9 +68,9 @@ guides, tests, Node dependencies, and `.github/` do not belong in the upload.
 Once the reviewed package is ready to publish:
 
 ```sh
-svn copy trunk tags/2.8.11
+svn copy trunk tags/2.8.12
 svn status
-svn commit trunk tags/2.8.11 -m "Release 2.8.11 — InnoDB detection and hierarchical taxonomy drags"
+svn commit trunk tags/2.8.12 -m "Release 2.8.12 — WooCommerce category order, false conflicts and MyISAM support"
 ```
 
 Complete release confirmation if WordPress.org requests it. Check the plugin
@@ -74,17 +81,17 @@ page and download the served ZIP to verify version and packaged file contents.
 From the clean, tested release commit in the Git checkout:
 
 ```sh
-git tag -a 2.8.11 -m "Release 2.8.11 — InnoDB detection and hierarchical taxonomy drags"
+git tag -a 2.8.12 -m "Release 2.8.12 — WooCommerce category order, false conflicts and MyISAM support"
 git push origin HEAD
-git push origin 2.8.11
-gh release create 2.8.11 simple-custom-post-order.zip \
+git push origin 2.8.12
+gh release create 2.8.12 simple-custom-post-order.zip \
   --repo ColorlibHQ/simple-custom-post-order \
   --verify-tag --draft \
-  --title "2.8.11 — InnoDB detection and hierarchical taxonomy drags" \
-  --notes-file .github/release-notes/2.8.11.md
+  --title "2.8.12 — WooCommerce category order, false conflicts and MyISAM support" \
+  --notes-file .github/release-notes/2.8.12.md
 ```
 
 The [GitHub CLI release command](https://cli.github.com/manual/gh_release_create)
 attaches the installable ZIP and uses the prepared notes. Review the draft,
 confirm its tag points to the tested commit, and publish it on GitHub. Check
-both channels show 2.8.11.
+both channels show 2.8.12.

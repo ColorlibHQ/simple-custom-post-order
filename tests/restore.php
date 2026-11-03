@@ -32,7 +32,8 @@ foreach ( $actual as $kind => $rows ) {
 	ksort( $expected_orders );
 	ksort( $actual_orders );
 	if ( $expected_orders !== $actual_orders ) {
-		WP_CLI::error( "Restored $kind do not match the snapshot; inspect the site for changed or leaked fixtures." );
+		$details = [ 'missing' => array_keys( array_diff_key( $expected_orders, $actual_orders ) ), 'added' => array_keys( array_diff_key( $actual_orders, $expected_orders ) ), 'changed' => array_slice( array_keys( array_udiff_assoc( $actual_orders, $expected_orders, static function ( $a, $b ) { return $a <=> $b; } ) ), 0, 10 ) ];
+		WP_CLI::error( "Restored $kind do not match the snapshot: " . wp_json_encode( $details ) );
 	}
 }
 foreach ( $s['opts'] as $key => $value ) {

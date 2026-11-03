@@ -72,6 +72,7 @@ module.exports = function(grunt) {
               '!vendor/**',
               '!build/**',
               '!tests/**',
+              '!artifacts/**',
               '!README.md',
               '!Gruntfile.js',
               '!package.json',
@@ -147,7 +148,7 @@ module.exports = function(grunt) {
           'plugin header Version': ( php.match( /^\s*\*\s*Version:\s*(\S+)/m ) || [] )[1],
           'SCPORDER_VERSION': ( php.match( /define\(\s*'SCPORDER_VERSION',\s*'([^']+)'/ ) || [] )[1],
           'readme Stable tag': ( readme.match( /^Stable tag:\s*(\S+)/m ) || [] )[1],
-          'readme changelog (top entry)': ( readme.split( '== Changelog ==' )[1] || '' ).match( /=\s*([\d.]+)/ ) ? RegExp.$1 : undefined,
+          'readme changelog (top entry)': ( readme.split( '== Changelog ==' )[1] || '' ).match( /^= (\S+) - /m ) ? RegExp.$1 : undefined,
           'CHANGELOG.md (top entry)': ( log.match( /^## \[([^\]]+)\]/m ) || [] )[1]
       };
       Object.keys( found ).forEach( function ( what ) {
