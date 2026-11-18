@@ -33,6 +33,7 @@ Easily reorder posts, pages, custom post types, and taxonomies with intuitive dr
 * **Custom Post Types** - Perfect for portfolios, team members, testimonials, products, events, FAQs, services, and more
 * **WooCommerce Products** - Manually sort products in your shop
 * **Taxonomies** - Reorder categories, tags, and custom taxonomies
+* **Parent / Child** - On hierarchical lists (Pages, Categories…), drag a row sideways to nest it under the item above or move it back out; the order and the new parent are saved together
 
 **Intuitive Admin Interface**
 
@@ -331,6 +332,12 @@ Deactivating leaves everything in place, so reactivating restores your order. De
 3. Settings page - select the post types and taxonomies to sort
 
 == Changelog ==
+
+= 2.8.12.1 =
+
+**New**
+
+* Change an item's **parent by dragging**. On hierarchical post types (Pages) and taxonomies (Categories) drag a row to the right to nest it under the item above, or to the left to move it back out. The dashes in front of the title preview where it will land, children travel with their parent, and only positions that keep the tree valid are offered. Keyboard: grab a row and press Right / Left Arrow. Switch it off under Settings > SCPOrder > Parent / child.
 
 = 2.8.12 - 2026-11-03 =
 

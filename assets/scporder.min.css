@@ -1,1 +1,331 @@
-#the-list tr:hover{cursor:move}.scpo-handle{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);border:0;white-space:nowrap;color:#787c82;background:0 0;cursor:grab}.scpo-handle .scpo-grip{width:16px;height:16px;fill:currentColor;pointer-events:none}.scpo-handle:focus,.scpo-handle:focus-visible{position:static;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;margin-block:0;margin-inline:-4px 4px;overflow:visible;clip:auto;clip-path:none;white-space:normal;vertical-align:middle;border-radius:3px;outline:2px solid var(--wp-admin-theme-color,#2271b1);outline-offset:1px}.scpo-handles-visible .scpo-handle-cell{position:relative;padding-inline-start:26px}.scpo-handles-visible .scpo-handle,.scpo-handles-visible .scpo-handle:focus,.scpo-handles-visible .scpo-handle:focus-visible{position:absolute;inset-inline-start:2px;top:8px;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin:0;overflow:visible;clip:auto;clip-path:none;white-space:normal;opacity:0;transition:opacity .12s ease}.scpo-handles-visible .scpo-handle:focus,.scpo-handles-visible .scpo-handle:focus-visible,.scpo-handles-visible tr:hover .scpo-handle{opacity:1}.scpo-handles-visible .scpo-handle:focus,.scpo-handles-visible .scpo-handle:focus-visible{border-radius:3px;outline:2px solid var(--wp-admin-theme-color,#2271b1);outline-offset:1px}.scpo-handles-visible tr:hover .scpo-handle{color:#1d2327}.scpo-grabbed{outline:2px dashed var(--wp-admin-theme-color,#2271b1);background-color:#f0f6fc}.scpo-ghost{opacity:.35}.scpo-chosen{background-color:#f6f7f7}.scpo-fallback{background-color:#fff;outline:2px solid var(--wp-admin-theme-color,#2271b1);box-shadow:0 6px 18px rgba(0,0,0,.18);cursor:grabbing}.scpo-toast{position:fixed;inset-inline-end:20px;bottom:20px;z-index:100000;display:flex;align-items:center;gap:12px;max-width:360px;padding:10px 16px;border-radius:4px;background:#1d2327;color:#fff;font-size:13px;line-height:1.5;box-shadow:0 2px 10px rgba(0,0,0,.25);outline:1px solid transparent;opacity:0;transform:translateY(8px);transition:opacity .2s ease,transform .2s ease;pointer-events:none}.scpo-toast.is-visible{opacity:1;transform:translateY(0)}.scpo-toast--saving{background:var(--wp-admin-theme-color,#2271b1)}.scpo-toast--saved{background:#007a3d}.scpo-toast--error{background:#d63638}.scpo-toast--error.is-visible{pointer-events:auto}.scpo-toast button{flex:none;margin:0;padding:2px 10px;border:1px solid currentColor;border-radius:3px;background:0 0;color:inherit;font:inherit;cursor:pointer}.scpo-toast .scpo-toast__dismiss{padding:0 6px;border-color:transparent;font-size:16px;line-height:1.2}.scpo-toast button:hover{background:rgba(255,255,255,.15)}.scpo-toast button:focus-visible{outline:2px solid #fff;outline-offset:1px}@media (prefers-reduced-motion:reduce){.scpo-handles-visible .scpo-handle,.scpo-toast{transition:none}}@media (forced-colors:active){.scpo-handle,.scpo-handles-visible tr:hover .scpo-handle{color:ButtonText}.scpo-handle .scpo-grip{fill:ButtonText}.scpo-handle:focus,.scpo-handle:focus-visible,.scpo-handles-visible .scpo-handle:focus,.scpo-handles-visible .scpo-handle:focus-visible{outline:2px solid Highlight}.scpo-grabbed{outline:3px dashed Highlight;outline-offset:-3px}.scpo-chosen,.scpo-fallback{outline:2px solid Highlight}.scpo-toast{border:1px solid CanvasText}.scpo-toast button{border-color:ButtonText;color:ButtonText;background:ButtonFace}}.scpo-sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);border:0;white-space:nowrap}@supports not (padding-inline-start:0){.scpo-handle:focus,.scpo-handle:focus-visible{margin:0 4px 0 -4px}.scpo-handles-visible .scpo-handle-cell{padding-left:26px}.scpo-handles-visible .scpo-handle,.scpo-handles-visible .scpo-handle:focus,.scpo-handles-visible .scpo-handle:focus-visible{left:2px}.scpo-toast{right:20px}.rtl .scpo-handle:focus,.rtl .scpo-handle:focus-visible{margin:0 -4px 0 4px}.rtl .scpo-handles-visible .scpo-handle-cell{padding-left:10px;padding-right:26px}.rtl .scpo-handles-visible .scpo-handle,.rtl .scpo-handles-visible .scpo-handle:focus,.rtl .scpo-handles-visible .scpo-handle:focus-visible{left:auto;right:2px}.rtl .scpo-toast{right:auto;left:20px}}
+/**
+ * Simple Custom Post Order — admin drag-and-drop styles (SortableJS path).
+ *
+ * Direction-dependent offsets use logical properties (padding-inline-start,
+ * inset-inline-*, margin-inline) so the grip gutter and toast mirror in RTL
+ * admin; an @supports block at the end falls back to physical properties +
+ * `.rtl` for browsers without them. Accent colours follow the user's admin
+ * colour scheme via --wp-admin-theme-color.
+ */
+
+/* Whole rows are draggable by mouse / touch; hint with a move cursor. */
+#the-list tr:hover {
+	cursor: move;
+}
+
+/* ---- Drag handle (grip dots) ----------------------------------------- */
+
+/* Resting state: visually hidden, but kept in the DOM and tab order so
+   keyboard users can always reach it — even when it's hidden for mouse users.
+   This is also the state when the "Show drag handle" setting is OFF. */
+.scpo-handle {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip: rect( 0, 0, 0, 0 );
+	clip-path: inset( 50% );
+	border: 0;
+	white-space: nowrap;
+	color: #787c82;
+	background: transparent;
+	cursor: grab;
+}
+
+.scpo-handle .scpo-grip {
+	width: 16px;
+	height: 16px;
+	fill: currentColor;
+	pointer-events: none;
+}
+
+/* HIDE mode: keyboard focus still reveals the handle inline (accessibility) —
+   brief, and only for the focused row. Mouse users see nothing. */
+.scpo-handle:focus,
+.scpo-handle:focus-visible {
+	position: static;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	margin-block: 0;
+	margin-inline: -4px 4px;
+	overflow: visible;
+	clip: auto;
+	clip-path: none;
+	white-space: normal;
+	vertical-align: middle;
+	border-radius: 3px;
+	outline: 2px solid var( --wp-admin-theme-color, #2271b1 );
+	outline-offset: 1px;
+}
+
+/* SHOW mode: reserve a slim gutter on the title cell and overlay the grip
+   there, OUT OF FLOW — so it never reflows the title or grows the row height.
+   It fades in on row hover or keyboard focus. Higher specificity than the HIDE
+   focus rule above, so the handle stays absolute (no jump) when focused. */
+.scpo-handles-visible .scpo-handle-cell {
+	position: relative;
+	padding-inline-start: 26px;
+}
+
+.scpo-handles-visible .scpo-handle,
+.scpo-handles-visible .scpo-handle:focus,
+.scpo-handles-visible .scpo-handle:focus-visible {
+	position: absolute;
+	inset-inline-start: 2px;
+	top: 8px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	margin: 0;
+	overflow: visible;
+	clip: auto;
+	clip-path: none;
+	white-space: normal;
+	opacity: 0;
+	transition: opacity 0.12s ease;
+}
+
+.scpo-handles-visible tr:hover .scpo-handle,
+.scpo-handles-visible .scpo-handle:focus,
+.scpo-handles-visible .scpo-handle:focus-visible {
+	opacity: 1;
+}
+
+.scpo-handles-visible .scpo-handle:focus,
+.scpo-handles-visible .scpo-handle:focus-visible {
+	border-radius: 3px;
+	outline: 2px solid var( --wp-admin-theme-color, #2271b1 );
+	outline-offset: 1px;
+}
+
+.scpo-handles-visible tr:hover .scpo-handle {
+	color: #1d2327;
+}
+
+/* The row currently "picked up" by the keyboard. */
+.scpo-grabbed {
+	outline: 2px dashed var( --wp-admin-theme-color, #2271b1 );
+	background-color: #f0f6fc;
+}
+
+/* The row left behind in the list while dragging. */
+.scpo-ghost {
+	opacity: 0.35;
+}
+
+/* The row the pointer grabbed. */
+.scpo-chosen {
+	background-color: #f6f7f7;
+}
+
+/* The row left in the list while dragging, when dropping it now would change
+   its parent: a stronger row, plus an accent on its leading edge. Its dashes
+   (and the floating row's) already show the new level. */
+.scpo-ghost.scpo-depth-changed {
+	opacity: 0.6;
+}
+
+.scpo-depth-changed > :first-child {
+	box-shadow: inset 3px 0 0 var( --wp-admin-theme-color, #2271b1 );
+}
+
+.rtl .scpo-depth-changed > :first-child {
+	box-shadow: inset -3px 0 0 var( --wp-admin-theme-color, #2271b1 );
+}
+
+/* The floating row that follows the pointer/finger. */
+.scpo-fallback {
+	background-color: #fff;
+	outline: 2px solid var( --wp-admin-theme-color, #2271b1 );
+	box-shadow: 0 6px 18px rgba( 0, 0, 0, 0.18 );
+	cursor: grabbing;
+}
+
+/* ---- Save-status toast ------------------------------------------------ */
+
+.scpo-toast {
+	position: fixed;
+	inset-inline-end: 20px;
+	bottom: 20px;
+	z-index: 100000;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	max-width: 360px;
+	padding: 10px 16px;
+	border-radius: 4px;
+	background: #1d2327;
+	color: #fff;
+	font-size: 13px;
+	line-height: 1.5;
+	box-shadow: 0 2px 10px rgba( 0, 0, 0, 0.25 );
+	outline: 1px solid transparent; /* becomes a visible edge in forced colours */
+	opacity: 0;
+	transform: translateY( 8px );
+	transition: opacity 0.2s ease, transform 0.2s ease;
+	pointer-events: none;
+}
+
+.scpo-toast.is-visible {
+	opacity: 1;
+	transform: translateY( 0 );
+}
+
+.scpo-toast--saving {
+	background: var( --wp-admin-theme-color, #2271b1 );
+}
+
+.scpo-toast--saved {
+	background: #007a3d;
+}
+
+.scpo-toast--error {
+	background: #d63638;
+}
+
+/* A failed save stays up with Retry / Dismiss, so it must take clicks. */
+.scpo-toast--error.is-visible {
+	pointer-events: auto;
+}
+
+.scpo-toast button {
+	flex: none;
+	margin: 0;
+	padding: 2px 10px;
+	border: 1px solid currentColor;
+	border-radius: 3px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+
+.scpo-toast .scpo-toast__dismiss {
+	padding: 0 6px;
+	border-color: transparent;
+	font-size: 16px;
+	line-height: 1.2;
+}
+
+.scpo-toast button:hover {
+	background: rgba( 255, 255, 255, 0.15 );
+}
+
+.scpo-toast button:focus-visible {
+	outline: 2px solid #fff;
+	outline-offset: 1px;
+}
+
+@media ( prefers-reduced-motion: reduce ) {
+	.scpo-toast,
+	.scpo-handles-visible .scpo-handle {
+		transition: none;
+	}
+}
+
+/* Windows High Contrast / forced colours: backgrounds and shadows are
+   discarded there, so mark the grip, focus, grabbed and dragged rows with
+   system colours instead. */
+@media ( forced-colors: active ) {
+	.scpo-handle,
+	.scpo-handles-visible tr:hover .scpo-handle {
+		color: ButtonText;
+	}
+
+	.scpo-handle .scpo-grip {
+		fill: ButtonText;
+	}
+
+	.scpo-handle:focus,
+	.scpo-handle:focus-visible,
+	.scpo-handles-visible .scpo-handle:focus,
+	.scpo-handles-visible .scpo-handle:focus-visible {
+		outline: 2px solid Highlight;
+	}
+
+	.scpo-grabbed {
+		outline: 3px dashed Highlight;
+		outline-offset: -3px;
+	}
+
+	.scpo-fallback,
+	.scpo-chosen {
+		outline: 2px solid Highlight;
+	}
+
+	.scpo-toast {
+		border: 1px solid CanvasText;
+	}
+
+	.scpo-toast button {
+		border-color: ButtonText;
+		color: ButtonText;
+		background: ButtonFace;
+	}
+}
+
+/* Visually hidden live region for screen-reader move announcements. */
+.scpo-sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip: rect( 0, 0, 0, 0 );
+	clip-path: inset( 50% );
+	border: 0;
+	white-space: nowrap;
+}
+
+/* Fallback for browsers without logical properties: physical LTR values,
+   mirrored under WP's `.rtl` body class. */
+@supports not ( padding-inline-start: 0 ) {
+	.scpo-handle:focus,
+	.scpo-handle:focus-visible {
+		margin: 0 4px 0 -4px;
+	}
+
+	.scpo-handles-visible .scpo-handle-cell {
+		padding-left: 26px;
+	}
+
+	.scpo-handles-visible .scpo-handle,
+	.scpo-handles-visible .scpo-handle:focus,
+	.scpo-handles-visible .scpo-handle:focus-visible {
+		left: 2px;
+	}
+
+	.scpo-toast {
+		right: 20px;
+	}
+
+	.rtl .scpo-handle:focus,
+	.rtl .scpo-handle:focus-visible {
+		margin: 0 -4px 0 4px;
+	}
+
+	.rtl .scpo-handles-visible .scpo-handle-cell {
+		padding-left: 10px; /* WP list-table cell padding */
+		padding-right: 26px;
+	}
+
+	.rtl .scpo-handles-visible .scpo-handle,
+	.rtl .scpo-handles-visible .scpo-handle:focus,
+	.rtl .scpo-handles-visible .scpo-handle:focus-visible {
+		left: auto;
+		right: 2px;
+	}
+
+	.rtl .scpo-toast {
+		right: auto;
+		left: 20px;
+	}
+}

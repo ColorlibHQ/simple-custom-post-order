@@ -494,6 +494,70 @@ msgstr ""
 msgid "Items have been reset."
 msgstr ""
 
+#: simple-custom-post-order.php
+msgid "Parent / child"
+msgstr ""
+
+#: simple-custom-post-order.php
+msgid "Let me change an item’s parent by dragging it sideways"
+msgstr ""
+
+#: simple-custom-post-order.php
+msgid "On hierarchical post types (such as Pages) and taxonomies (such as Categories), drag a row to the right to nest it under the item above, or to the left to move it back out — the dashes in front of the title show where it will land. With the keyboard, grab a row and press the Right or Left arrow key. Applies to the Modern engine. Developers can override with the scpo_allow_reparent filter."
+msgstr ""
+
+#: simple-custom-post-order.php
+msgid "Reload"
+msgstr ""
+
+#: simple-custom-post-order.php
+msgid "Couldn’t change the parent — reload to see the saved hierarchy"
+msgstr ""
+
+#: simple-custom-post-order.php
+msgid "Use the Left and Right arrow keys to nest or un-nest the item."
+msgstr ""
+
+#: simple-custom-post-order.php
+#. translators: 1: item title, 2: title of its new parent.
+msgid "%1$s is now a child of %2$s."
+msgstr ""
+
+#: simple-custom-post-order.php
+#. translators: %1$s: item title.
+msgid "%1$s is now at the top level."
+msgstr ""
+
+#: simple-custom-post-order.php
+#. translators: %1$s: item title.
+msgid "%1$s has no item above it to nest under."
+msgstr ""
+
+#: simple-custom-post-order.php
+#. translators: %1$s: item title.
+msgid "%1$s is already at the top level."
+msgstr ""
+
+#: simple-custom-post-order.php
+msgid "Changing the parent by dragging is turned off."
+msgstr ""
+
+#: simple-custom-post-order.php
+msgid "This item cannot have a parent."
+msgstr ""
+
+#: simple-custom-post-order.php
+msgid "That item cannot be used as a parent."
+msgstr ""
+
+#: simple-custom-post-order.php
+msgid "The parent could not be changed."
+msgstr ""
+
+#: simple-custom-post-order.php
+msgid "An item cannot be placed inside itself."
+msgstr ""
+
 #. Plugin URI of the plugin/theme
 msgid "https://wordpress.org/plugins/simple-custom-post-order/"
 msgstr ""

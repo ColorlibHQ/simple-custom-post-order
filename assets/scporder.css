@@ -125,6 +125,21 @@
 	background-color: #f6f7f7;
 }
 
+/* The row left in the list while dragging, when dropping it now would change
+   its parent: a stronger row, plus an accent on its leading edge. Its dashes
+   (and the floating row's) already show the new level. */
+.scpo-ghost.scpo-depth-changed {
+	opacity: 0.6;
+}
+
+.scpo-depth-changed > :first-child {
+	box-shadow: inset 3px 0 0 var( --wp-admin-theme-color, #2271b1 );
+}
+
+.rtl .scpo-depth-changed > :first-child {
+	box-shadow: inset -3px 0 0 var( --wp-admin-theme-color, #2271b1 );
+}
+
 /* The floating row that follows the pointer/finger. */
 .scpo-fallback {
 	background-color: #fff;
