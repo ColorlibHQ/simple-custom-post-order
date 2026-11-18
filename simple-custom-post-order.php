@@ -1692,9 +1692,7 @@ class SCPO_Engine {
 	}
 
 	/**
-	 * Term counterpart of apply_post_parent_moves(), through wp_update_term() —
-	 * which also enforces WordPress's own "same name under the same parent" rule
-	 * and reports it as an error.
+	 * Term counterpart of apply_post_parent_moves(), through wp_update_term()
 	 *
 	 * @param array<int,int> $moves Map of term ID => new parent term ID.
 	 * @return true|WP_Error
