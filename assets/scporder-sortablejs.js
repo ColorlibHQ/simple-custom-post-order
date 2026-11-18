@@ -12,8 +12,17 @@
  *   - Keyboard      : Tab to a row's handle (revealed on focus), Space/Enter to
  *                     grab, Arrow keys (and Home/End) to move, Space/Enter to
  *                     drop, Escape to cancel. Announced via an aria-live region.
- *                     In a page/category tree, keyboard moves stay among the
- *                     row's siblings (see moveBlock()).
+ *                     In a page/category tree, Up/Down stay among the row's
+ *                     siblings (see moveBlock()); Right/Left nest the row under
+ *                     the sibling above it / move it back out (see nest()).
+ *
+ * Changing the parent (hierarchical lists only, when `allowReparent` is set):
+ *   - Mouse / touch : drag a row sideways while dragging it. Each INDENT px
+ *                     is one level; the row's dashes preview where it will
+ *                     land, and only positions that keep the tree valid are
+ *                     offered (see parentChain()).
+ *   - Keyboard      : Right / Left Arrow while a row is grabbed.
+ * The new parent travels with the order in the same request (`parents[id]`).
  *
  * Both paths persist through the same AJAX endpoint and save toast.
  *
@@ -58,6 +67,20 @@
 	var dragStartKey = '';  // row order when the mouse drag began
 	var isDragging = false; // a SortableJS drag is in progress
 
+	// Changing the parent. `allowReparent` is decided by PHP: the setting is on
+	// and this is a hierarchical list (pages, categories, ...).
+	var allowReparent = !! vars.allowReparent;
+	var INDENT = 28;        // px of sideways drag per nesting level
+	var isRtl = document.documentElement.dir === 'rtl' || document.body.classList.contains( 'rtl' );
+
+	var pendingMoves = {};  // row id -> new parent row id (null = top level), not yet confirmed saved
+	var inFlightMoves = {}; // the moves the request currently in flight carries
+	var downX = 0;          // pointer x when the press began
+	var pointerX = 0;       // latest pointer x
+	var dragRow = null;     // the row being dragged with the mouse / finger
+	var dragOrigin = null;  // { parent, level } of that row when the drag began
+	var previewQueued = false;
+
 	var toast = createToast();
 	var live = createLiveRegion();
 	var instructionsId = createInstructions();
@@ -71,9 +94,9 @@
 	 * guaranteed to describe the tree at load: after a drop the DOM is just a
 	 * flat run of rows, and reading "the deeper rows that follow" from it made
 	 * a row dropped between a parent and its first child adopt that child on
-	 * its next drag. Saving never changes post_parent, so the load-time tree
-	 * stays true for the life of the page. Keyed by id, not element, so a row
-	 * whose HTML Quick Edit replaces keeps its place in the tree.
+	 * its next drag. The map is kept true afterwards by commitParent(), the one
+	 * place a row's parent changes. Keyed by id, not element, so a row whose
+	 * HTML Quick Edit replaces keeps its place in the tree.
 	 */
 	var tree = {};
 
@@ -221,6 +244,232 @@
 		}
 	}
 
+	/* ---- Changing the parent ------------------------------------------- */
+
+	/** "post-12" / "tag-45" -> "12" / "45". */
+	function numericId( id ) {
+		return id.slice( id.lastIndexOf( '-' ) + 1 );
+	}
+
+	function rowById( id ) {
+		var rows = sortableRows();
+		for ( var i = 0; i < rows.length; i++ ) {
+			if ( rows[ i ].id === id ) {
+				return rows[ i ];
+			}
+		}
+		return null;
+	}
+
+	/** Nesting level the tree records for a row id (0 when unknown). */
+	function levelById( id ) {
+		var node = tree[ id ];
+		return node && null !== node.level ? node.level : 0;
+	}
+
+	function levelOf( row ) {
+		parentOf( row ); // registers a row the tree has not seen yet
+		return levelById( row.id );
+	}
+
+	/**
+	 * Show a row at `level`: its `level-N` class and the "— " dashes WordPress
+	 * prints in front of the title. DOM only — the tree is updated by
+	 * commitParent(), so a mouse drag can preview a level and take it back.
+	 */
+	function paintLevel( row, level ) {
+		var from = rowLevel( row );
+		if ( null === from ) {
+			from = 0;
+		}
+		if ( from === level ) {
+			return;
+		}
+		if ( /(?:^|\s)level-\d+(?:\s|$)/.test( row.className ) ) {
+			row.className = row.className.replace( /(^|\s)level-\d+(?=\s|$)/, '$1level-' + level );
+		} else {
+			row.classList.add( 'level-' + level );
+		}
+		var title = row.querySelector( '.row-title' );
+		var text = title ? title.firstChild : null;
+		if ( text && 3 === text.nodeType ) {
+			var rest = text.nodeValue.replace( new RegExp( '^(?:\u2014\\s){0,' + from + '}' ), '' );
+			text.nodeValue = new Array( level + 1 ).join( '\u2014 ' ) + rest;
+		}
+	}
+
+	/** Keep the hidden Quick Edit data in step, so its Parent field is right. */
+	function setDeclaredParent( row, parentId ) {
+		var el = row.querySelector( '.hidden .post_parent, .hidden .parent' );
+		if ( el ) {
+			el.textContent = parentId ? numericId( parentId ) : '0';
+		}
+	}
+
+	/**
+	 * Give `row` a new parent at `level`: the tree, the row's own markup and
+	 * every row nested under it (they keep their parent and move with it).
+	 */
+	function commitParent( row, parentId, level ) {
+		parentOf( row ); // make sure the tree knows the row
+		var node = tree[ row.id ];
+		var delta = level - ( null === node.level ? 0 : node.level );
+
+		node.parent = parentId;
+		node.level = level;
+		paintLevel( row, level );
+		setDeclaredParent( row, parentId );
+
+		if ( delta ) {
+			descendantsOf( row ).forEach( function ( kid ) {
+				var kidNode = tree[ kid.id ];
+				if ( kidNode ) {
+					kidNode.level = ( null === kidNode.level ? 0 : kidNode.level ) + delta;
+					paintLevel( kid, kidNode.level );
+				}
+			} );
+		}
+	}
+
+	/**
+	 * Every parent `row` (with its subtree) may have at its current position in
+	 * the list, deepest first; `null` stands for the top level.
+	 *
+	 * The list is one flat, depth-first run of rows, so the tree stays valid only
+	 * if the block lands under the row above it or under one of that row's
+	 * ancestors — and not above the row below's own parent, or that row would
+	 * silently become the block's child. That chain is what is offered.
+	 */
+	function parentChain( row ) {
+		var block = {};
+		block[ row.id ] = true;
+		descendantsOf( row ).forEach( function ( kid ) {
+			block[ kid.id ] = true;
+		} );
+
+		var rows = sortableRows();
+		var index = rows.indexOf( row );
+		var prev = null;
+		var next = null;
+		var i;
+		for ( i = index - 1; i >= 0; i-- ) {
+			if ( ! block[ rows[ i ].id ] ) {
+				prev = rows[ i ];
+				break;
+			}
+		}
+		for ( i = index + 1; i < rows.length; i++ ) {
+			if ( ! block[ rows[ i ].id ] ) {
+				next = rows[ i ];
+				break;
+			}
+		}
+
+		var stopAt = next ? parentOf( next ) : null;
+		var chain = [];
+		var cur = prev ? prev.id : null;
+		var guard = 0;
+		while ( guard++ < 100 ) {
+			chain.push( cur );
+			if ( cur === stopAt || null === cur ) {
+				break;
+			}
+			cur = tree[ cur ] ? tree[ cur ].parent : null;
+		}
+		return chain;
+	}
+
+	/**
+	 * Where the dragged row would land right now: its parent and nesting level.
+	 *
+	 * Sideways travel since the press picks the level (the starting level plus
+	 * one per INDENT px), clamped to what parentChain() allows. With no real
+	 * sideways travel the row keeps its parent whenever that is still possible,
+	 * so an ordinary up/down reorder never re-parents anything by accident.
+	 */
+	function targetFor( row ) {
+		var chain = parentChain( row );
+		var steps = Math.round( ( pointerX - downX ) * ( isRtl ? -1 : 1 ) / INDENT );
+		var best = chain[ 0 ];
+
+		if ( 0 === steps && chain.indexOf( dragOrigin.parent ) !== -1 ) {
+			best = dragOrigin.parent;
+		} else {
+			var want = dragOrigin.level + steps;
+			var bestDiff = Infinity;
+			for ( var i = 0; i < chain.length; i++ ) {
+				var level = null === chain[ i ] ? 0 : levelById( chain[ i ] ) + 1;
+				if ( Math.abs( level - want ) < bestDiff ) {
+					bestDiff = Math.abs( level - want );
+					best = chain[ i ];
+				}
+			}
+		}
+
+		return { parent: best, level: null === best ? 0 : levelById( best ) + 1 };
+	}
+
+	function scheduleDepthPreview() {
+		if ( ! allowReparent || ! isDragging || previewQueued ) {
+			return;
+		}
+		previewQueued = true;
+		if ( typeof window.requestAnimationFrame === 'function' ) {
+			window.requestAnimationFrame( previewDepth );
+		} else {
+			setTimeout( previewDepth, 16 );
+		}
+	}
+
+	/** Show the level the dragged row would get, on the row left in the list and on the one under the pointer. */
+	function previewDepth() {
+		previewQueued = false;
+		if ( ! isDragging || ! dragRow || ! dragOrigin ) {
+			return;
+		}
+		var target = targetFor( dragRow );
+		paintLevel( dragRow, target.level );
+		var clone = list.querySelector( '.scpo-fallback' );
+		if ( clone ) {
+			paintLevel( clone, target.level );
+		}
+		dragRow.classList.toggle( 'scpo-depth-changed', target.parent !== dragOrigin.parent );
+	}
+
+	function pointX( evt ) {
+		var point = evt.touches && evt.touches[ 0 ] ? evt.touches[ 0 ] : evt;
+		return typeof point.clientX === 'number' ? point.clientX : null;
+	}
+
+	if ( allowReparent ) {
+		[ 'pointerdown', 'mousedown', 'touchstart' ].forEach( function ( name ) {
+			document.addEventListener(
+				name,
+				function ( evt ) {
+					var x = pointX( evt );
+					if ( null !== x ) {
+						downX = x;
+						pointerX = x;
+					}
+				},
+				{ capture: true, passive: true }
+			);
+		} );
+		[ 'pointermove', 'mousemove', 'touchmove' ].forEach( function ( name ) {
+			document.addEventListener(
+				name,
+				function ( evt ) {
+					var x = pointX( evt );
+					if ( null !== x ) {
+						pointerX = x;
+						scheduleDepthPreview();
+					}
+				},
+				{ capture: true, passive: true }
+			);
+		} );
+	}
+
 	/* ---- Rows added or replaced after load ----------------------------- */
 
 	// Quick Edit swaps a saved row's HTML for a fresh <tr>, and edit-tags.php
@@ -234,6 +483,11 @@
 				for ( var n = 0; n < nodes.length; n++ ) {
 					var row = nodes[ n ];
 					if ( 1 !== row.nodeType || ! isSortableRow( row ) ) {
+						continue;
+					}
+					// The row under the pointer shows a previewed level that the
+					// tree doesn't have (yet) — don't read that back as a change.
+					if ( row === dragRow ) {
 						continue;
 					}
 					// Our own moves re-add known rows with handles — skip those.
@@ -293,23 +547,57 @@
 			// it just carries the row's true subtree.
 			draggedKids = descendantsOf( evt.item );
 			dragStartKey = orderKey();
+			if ( allowReparent ) {
+				dragRow = evt.item;
+				dragOrigin = { parent: parentOf( evt.item ), level: levelOf( evt.item ) };
+			}
 		},
 		onUnchoose: function ( evt ) {
 			unlockRowWidths( evt.item );
+			if ( ! isDragging ) {
+				// Pressed but never dragged.
+				dragRow = null;
+				dragOrigin = null;
+			}
 			isDragging = false; // belt and braces: never leave saves deferred forever
 		},
 		onStart: function () {
 			isDragging = true;
 		},
+		onChange: function () {
+			scheduleDepthPreview(); // the row moved to a new spot: its allowed levels changed
+		},
 		onEnd: function ( evt ) {
 			isDragging = false;
+			var row = evt.item;
+
+			// Where the row landed, and under which parent — worked out before
+			// the children are brought along (it only looks at rows outside
+			// the dragged block, so the result is the same either way).
+			var target = dragOrigin ? targetFor( row ) : null;
+
 			// Bring the children along before reading the order back out of
 			// the DOM, so the request matches what the user is looking at.
-			reattach( evt.item, draggedKids );
+			reattach( row, draggedKids );
 			draggedKids = [];
+
+			var reparented = false;
+			if ( target ) {
+				row.classList.remove( 'scpo-depth-changed' );
+				if ( target.parent !== dragOrigin.parent ) {
+					commitParent( row, target.parent, target.level );
+					pendingMoves[ row.id ] = target.parent;
+					reparented = true;
+				} else {
+					paintLevel( row, levelOf( row ) ); // take the preview back
+				}
+			}
+			dragRow = null;
+			dragOrigin = null;
+
 			// Compare the whole order, not old/new index: dropping a parent
 			// inside its own subtree snaps back to where it started.
-			if ( orderKey() !== dragStartKey ) {
+			if ( reparented || orderKey() !== dragStartKey ) {
 				saveOrder();
 			} else {
 				flushDeferredSave();
@@ -324,6 +612,7 @@
 	var grabSnapshot = null;  // every row of #the-list, in order, at grab time
 	var grabKey = '';         // sortable-row order at grab time
 	var isMoving = false;     // guards focusout while we reorder the DOM
+	var grabOrigin = null;    // { parent, level } of the grabbed row at grab time
 
 	list.addEventListener( 'keydown', onKeydown );
 	list.addEventListener( 'focusout', function ( evt ) {
@@ -371,6 +660,14 @@
 				evt.preventDefault();
 				step( 'last', row, handle );
 				break;
+			case 'ArrowRight':
+			case 'ArrowLeft':
+				if ( allowReparent ) {
+					evt.preventDefault();
+					// "Deeper" is toward the end of the line: right in LTR, left in RTL.
+					nest( ( 'ArrowRight' === key ) !== isRtl ? 'in' : 'out', row, handle );
+				}
+				break;
 			case 'Enter':
 			case ' ':
 			case 'Spacebar':
@@ -394,6 +691,7 @@
 		grabbedHandle = handle;
 		grabSnapshot = Array.prototype.slice.call( list.children );
 		grabKey = orderKey();
+		grabOrigin = allowReparent ? { parent: parentOf( row ), level: levelOf( row ) } : null;
 		handle.setAttribute( 'aria-pressed', 'true' );
 		row.classList.add( 'scpo-grabbed' );
 
@@ -445,11 +743,84 @@
 		);
 	}
 
+	/**
+	 * Right / Left Arrow on a grabbed row: nest it under the sibling above it
+	 * (`in`), or move it back out to sit after its parent (`out`).
+	 */
+	function nest( dir, row, handle ) {
+		isMoving = true;
+		var ok = 'in' === dir ? indentBlock( row ) : outdentBlock( row );
+		if ( ok ) {
+			handle.focus();
+			if ( row.scrollIntoView ) {
+				row.scrollIntoView( { block: 'nearest' } );
+			}
+		}
+		isMoving = false;
+
+		if ( ! ok ) {
+			announce(
+				format(
+					( 'in' === dir ? strings.cantNest : strings.cantUnnest ) ||
+						( 'in' === dir ? '%1$s has no item above it to nest under.' : '%1$s is already at the top level.' ),
+					rowTitle( row )
+				)
+			);
+			return;
+		}
+
+		var parentId = parentOf( row );
+		var parentRow = parentId ? rowById( parentId ) : null;
+		announce(
+			parentRow
+				? format( strings.movedUnder || '%1$s is now a child of %2$s.', rowTitle( row ), rowTitle( parentRow ) )
+				: format( strings.movedTop || '%1$s is now at the top level.', rowTitle( row ) )
+		);
+	}
+
+	function siblingsOf( row ) {
+		var parent = parentOf( row );
+		return sortableRows().filter( function ( r ) {
+			return parentOf( r ) === parent;
+		} );
+	}
+
+	/** Become the last child of the sibling directly above. False when there is none. */
+	function indentBlock( row ) {
+		var sibs = siblingsOf( row );
+		var newParent = sibs[ sibs.indexOf( row ) - 1 ];
+		if ( ! newParent ) {
+			return false;
+		}
+		// Normally already in place (the row follows its sibling's subtree);
+		// this just guarantees it.
+		insertBlock( row, afterBlock( newParent ) );
+		commitParent( row, newParent.id, levelOf( newParent ) + 1 );
+		return true;
+	}
+
+	/** Become the next sibling of the current parent, after the parent's whole subtree. */
+	function outdentBlock( row ) {
+		var parentId = parentOf( row );
+		var parentRow = parentId ? rowById( parentId ) : null;
+		if ( ! parentRow ) {
+			return false;
+		}
+		var grandparent = parentOf( parentRow );
+		insertBlock( row, afterBlock( parentRow ) );
+		commitParent( row, grandparent, levelOf( parentRow ) );
+		return true;
+	}
+
 	function drop( row ) {
 		var pos = positionOf( row );
 		var title = rowTitle( row );
 		// Up-then-down is not a change; only save if the order really differs.
 		var changed = orderKey() !== grabKey;
+		if ( grabOrigin && parentOf( row ) !== grabOrigin.parent ) {
+			pendingMoves[ row.id ] = parentOf( row );
+			changed = true;
+		}
 		endGrab( row );
 		if ( changed ) {
 			saveOrder();
@@ -476,6 +847,9 @@
 			}
 		}
 		isMoving = false;
+		if ( grabOrigin ) {
+			commitParent( row, grabOrigin.parent, grabOrigin.level ); // and take any nesting back
+		}
 		var pos = positionOf( row );
 		var title = rowTitle( row );
 		var handle = grabbedHandle;
@@ -504,6 +878,7 @@
 		grabbedHandle = null;
 		grabSnapshot = null;
 		grabKey = '';
+		grabOrigin = null;
 	}
 
 	/* ---- DOM movement helpers ------------------------------------------ */
@@ -512,10 +887,10 @@
 	 * Move `row` and its whole subtree one sibling up/down, or to the first/last
 	 * sibling. Returns false (and touches nothing) at the boundary.
 	 *
-	 * Keyboard moves are constrained to the row's siblings — rows with the same
-	 * parent. Saving never changes post_parent, so moving a row under another
-	 * parent would be a lie that the list table undoes on the next load. Every
-	 * row is a sibling on a flat list, so there this is the plain one-row step.
+	 * Up/Down are constrained to the row's siblings — rows with the same
+	 * parent — so they never change the hierarchy by accident; changing the
+	 * parent is the explicit Right / Left Arrow (see nest()). Every row is a
+	 * sibling on a flat list, so there this is the plain one-row step.
 	 */
 	function moveBlock( row, dir ) {
 		var parent = parentOf( row );
@@ -646,10 +1021,15 @@
 	function rowTitle( row ) {
 		var t = row.querySelector( '.row-title' );
 		if ( t ) {
-			return t.textContent.trim();
+			return plainTitle( t.textContent );
 		}
 		var cell = firstDataCell( row );
-		return cell ? cell.textContent.trim() : row.id;
+		return cell ? plainTitle( cell.textContent ) : row.id;
+	}
+
+	/** A title without the "— — " nesting dashes WordPress puts in front of it. */
+	function plainTitle( text ) {
+		return text.trim().replace( /^(?:\u2014\s*)+/, '' );
 	}
 
 	function firstDataCell( row ) {
@@ -825,6 +1205,10 @@
 		}
 		saving = true;
 		pendingSave = false;
+		inFlightMoves = {};
+		Object.keys( pendingMoves ).forEach( function ( id ) {
+			inFlightMoves[ id ] = pendingMoves[ id ];
+		} );
 		showToast( strings.saving || 'Saving order…', 'saving' );
 		postOrder( serializeOrder(), { netRetries: 1, nonceRefreshed: false } );
 	}
@@ -937,6 +1321,11 @@
 			body.set( 'original_order', savedOrder );
 			if ( savedValues ) { body.set( 'original_values', JSON.stringify( savedValues ) ); }
 			body.set( 'nonce', vars.nonce || '' );
+			// New parents ride along with the order: parents[<id>]=<parent id|0>.
+			Object.keys( inFlightMoves ).forEach( function ( id ) {
+				var parentId = inFlightMoves[ id ];
+				body.set( 'parents[' + numericId( id ) + ']', parentId ? numericId( parentId ) : '0' );
+			} );
 			body = body.toString();
 		} catch ( e ) {
 			finishSave( false ); // never leave `saving` stuck
@@ -946,12 +1335,14 @@
 		request( body )
 			.then( function ( res ) {
 				var r = parseReply( res.text );
+				var data = r.json && r.json.data && 'object' === typeof r.json.data ? r.json.data : {};
 				return {
 					ok: !! ( res.ok && r.json && r.json.success ),
 					values: r.json && r.json.data && r.json.data.order_values,
 					staleNonce: r.staleNonce,
 					reload: !! ( r.json && r.json.data && r.json.data.reload ),
 					message: r.json && r.json.data && typeof r.json.data.message === 'string' ? r.json.data.message : '',
+					code: 'string' === typeof data.code ? data.code : '',
 				};
 			} )
 			.then(
@@ -975,7 +1366,7 @@
 						return;
 					}
 					// Surface the server's recovery instructions without exposing HTML.
-					finishSave( false, r.message, r.reload );
+					finishSave( false, r.message, r.reload, r.code );
 				},
 				function () {
 					// Transient/network error or timeout: retry once, then give up.
@@ -1023,8 +1414,18 @@
 			);
 	}
 
-	function finishSave( ok, message, reload ) {
+	function finishSave( ok, message, reload, code ) {
 		saving = false;
+		if ( ok ) {
+			// Moves the server has applied (and that weren't changed again while
+			// the request was in flight) no longer need sending.
+			Object.keys( inFlightMoves ).forEach( function ( id ) {
+				if ( pendingMoves[ id ] === inFlightMoves[ id ] ) {
+					delete pendingMoves[ id ];
+				}
+			} );
+		}
+		inFlightMoves = {};
 		if ( ok && pendingSave ) {
 			// Order changed again mid-flight — persist the latest (or wait for
 			// the drag / grab in progress to end first).
@@ -1036,6 +1437,13 @@
 			markUnsaved( false );
 			syncOrderInputs();
 			showToast( strings.saved || 'Order saved', 'saved' );
+		} else if ( 'parent' === code || reload ) {
+			// The server refused the new parent (e.g. a category of that name
+			// already exists there), or says the list is stale. The list now shows
+			// a hierarchy or order that isn't stored, and sending the same request
+			// again can't help: forget the pending moves and offer a reload.
+			pendingMoves = {};
+			showToast( message || ( 'parent' === code ? strings.parentFailed : strings.error ) || 'Couldn’t save — please reload the list', 'error', true, true );
 		} else {
 			// The list now shows an order the server doesn't have. Keep the error
 			// up with a Retry: every save sends the whole visible order, so one
@@ -1168,8 +1576,9 @@
 		el.id = 'scpo-reorder-instructions';
 		el.className = 'scpo-sr-only';
 		el.textContent =
-			strings.instructions ||
-			'Press Space or Enter to grab. Use the arrow keys, Home and End to move, Space or Enter to drop, Escape to cancel.';
+			( strings.instructions ||
+				'Press Space or Enter to grab. Use the arrow keys, Home and End to move, Space or Enter to drop, Escape to cancel.' ) +
+			( allowReparent ? ' ' + ( strings.instructionsNest || 'Use the Left and Right arrow keys to nest or un-nest the item.' ) : '' );
 		document.body.appendChild( el );
 		return el.id;
 	}
