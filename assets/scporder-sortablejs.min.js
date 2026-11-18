@@ -1438,8 +1438,7 @@
 			syncOrderInputs();
 			showToast( strings.saved || 'Order saved', 'saved' );
 		} else if ( 'parent' === code || reload ) {
-			// The server refused the new parent (e.g. a category of that name
-			// already exists there), or says the list is stale. The list now shows
+			// The server refused the new parent, or says the list is stale. The list now shows
 			// a hierarchy or order that isn't stored, and sending the same request
 			// again can't help: forget the pending moves and offer a reload.
 			pendingMoves = {};
