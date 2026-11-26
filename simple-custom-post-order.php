@@ -2287,7 +2287,7 @@ class SCPO_Engine {
 			checked( $on, true, false ),
 			esc_html__( 'Let me change an item’s parent by dragging it sideways', 'simple-custom-post-order' )
 		);
-		echo '<p class="description">' . esc_html__( 'On hierarchical post types (such as Pages) and taxonomies (such as Categories), drag a row to the right to nest it under the item above, or to the left to move it back out — the dashes in front of the title show where it will land. With the keyboard, grab a row and press the Right or Left arrow key. Off by default. Applies to the Modern engine. Developers can override with the scpo_allow_reparent filter.', 'simple-custom-post-order' ) . '</p>';
+		echo '<p class="description">' . esc_html__( 'On hierarchical post types (such as Pages) and taxonomies (such as Categories), drag a row to the right to nest it under the item above, or to the left to move it back out — the dashes in front of the title show where it will land. With the keyboard, grab a row and press the Right or Left arrow key. Moving a published page under another page changes its address (URL), and WordPress does not redirect the old address, so update any links to it. Off by default. Applies to the Modern engine. Developers can override with the scpo_allow_reparent filter.', 'simple-custom-post-order' ) . '</p>';
 	}
 
 	/**
