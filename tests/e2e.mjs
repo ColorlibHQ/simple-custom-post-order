@@ -433,6 +433,176 @@ try {
 	await page.goto( B + '/edit.php', { waitUntil: 'networkidle2' } );
 	ok( 'a list in custom order shows no notice', ! ( await page.$( '.scpo-order-notice' ) ) );
 
+	/* ---------------- Parent / child by dragging (opt-in, 2.9.0) ---------------- */
+	console.log( '\n== Parent / child by dragging (opt-in) ==' );
+	const reparentOpts = wp( 'echo json_encode(get_option("scporder_options"));' );
+	const pageRows = wp( 'global $wpdb; echo json_encode($wpdb->get_results("SELECT ID, post_parent, menu_order, post_name FROM $wpdb->posts WHERE post_type=\'page\'", ARRAY_A));' );
+	const catRows = wp( 'global $wpdb; echo json_encode($wpdb->get_results("SELECT tt.term_id, tt.parent, t.term_order FROM $wpdb->term_taxonomy tt JOIN $wpdb->terms t ON t.term_id=tt.term_id WHERE tt.taxonomy=\'category\'", ARRAY_A));' );
+	const parentOf = ( rowId ) => Number( wp( `clean_post_cache(${ idNum( rowId ) }); echo (int) get_post_field("post_parent", ${ idNum( rowId ) });` ) );
+	const termParentOf = ( rowId ) => Number( wp( `clean_term_cache(${ idNum( rowId ) }); echo (int) get_term(${ idNum( rowId ) })->parent;` ) );
+	const levelOfRow = ( rowId ) => page.$eval( '#' + rowId, ( r ) => Number( ( r.className.match( /level-(\d+)/ ) || [ 0, 0 ] )[ 1 ] ) );
+	// Two adjacent top-level rows with no children, followed by another top-level row.
+	const leafPair = () => page.$$eval( '#the-list > tr[id]', ( rows ) => {
+		const lv = ( r ) => Number( ( r.className.match( /level-(\d+)/ ) || [ 0, 0 ] )[ 1 ] );
+		for ( let i = 0; i + 2 < rows.length; i++ ) {
+			if ( lv( rows[ i ] ) === 0 && lv( rows[ i + 1 ] ) === 0 && lv( rows[ i + 2 ] ) === 0 ) return [ rows[ i ].id, rows[ i + 1 ].id ];
+		}
+		return null;
+	} );
+	const sideways = async ( rowId, dx, dy = 0 ) => {
+		const box = await ( await page.$( `#${ rowId } .scpo-handle` ) || await page.$( `#${ rowId } .row-title` ) ).boundingBox();
+		const x = box.x + box.width / 2, y = box.y + box.height / 2;
+		await page.hover( `#${ rowId } .row-title` );
+		await page.mouse.move( x, y );
+		await page.mouse.down();
+		for ( let i = 1; i <= 15; i++ ) { await page.mouse.move( x + ( dx * i ) / 15, y + ( dy * i ) / 15 ); await sleep( 25 ); }
+		await sleep( 200 );
+		await page.mouse.up();
+	};
+	try {
+		await page.goto( B + '/edit.php?post_type=page', { waitUntil: 'networkidle2' } );
+		ok( 'parent dragging is off by default', '' === await page.evaluate( () => window.scporder_vars.allowReparent ) );
+		let pair = await leafPair();
+		if ( pair ) {
+			ajax.length = 0;
+			await keyboardMove( pair[ 1 ], [ 'ArrowRight' ] );
+			await sleep( 600 );
+			ok( 'with it off, Right Arrow changes nothing and saves nothing', 0 === parentOf( pair[ 1 ] ) && ajax.filter( ( a ) => a.action === 'update-menu-order' ).length === 0 );
+		}
+
+		wp( '$o=get_option("scporder_options"); $o["allow_reparent"]="1"; update_option("scporder_options",$o); echo 1;' );
+		await page.reload( { waitUntil: 'networkidle2' } );
+		ok( 'switching it on reaches the list', '1' === await page.evaluate( () => window.scporder_vars.allowReparent ) );
+		pair = await leafPair();
+		if ( ! pair ) {
+			ok( 'found two adjacent top-level pages without children', false );
+		} else {
+			const [ upper, lower ] = pair;
+			ajax.length = 0;
+			await page.focus( `#${ lower } .scpo-handle` );
+			await page.keyboard.press( 'Space' );
+			await page.keyboard.press( 'ArrowRight' );
+			await sleep( 100 );
+			const announced = await page.$eval( '.scpo-sr-only[aria-live="assertive"]', ( e ) => e.textContent ).catch( () => '' );
+			await page.keyboard.press( 'Space' );
+			ok( 'Right Arrow nests a page and saves', await waitToast( 'saved' ) );
+			ok( 'the page is now a child of the row above', idNum( upper ) === parentOf( lower ) );
+			const sent = ajax.find( ( a ) => a.action === 'update-menu-order' );
+			ok( 'the new parent travels with the order in one request', !! sent && new URLSearchParams( sent.body ).get( `parents[${ idNum( lower ) }]` ) === String( idNum( upper ) ) );
+			ok( 'the nesting is announced to screen readers', /is now a child of/.test( announced ), announced );
+			ok( 'the row shows its new level before any reload', 1 === await levelOfRow( lower ) );
+			await page.evaluate( ( id ) => document.querySelector( '#' + id + ' button.editinline' ).click(), lower );
+			await page.waitForSelector( 'tr.inline-edit-row', { visible: true } );
+			ok( 'Quick Edit offers the new parent', String( idNum( upper ) ) === await page.$eval( 'tr.inline-edit-row select[name="post_parent"]', ( el ) => el.value ).catch( () => 'none' ) );
+			await page.evaluate( () => document.querySelector( 'tr.inline-edit-row button.cancel' ).click() );
+			await sleep( 300 );
+			await page.reload( { waitUntil: 'networkidle2' } );
+			ok( 'after a reload WordPress shows it nested under that page', 1 === await levelOfRow( lower ) && ( await rowIds() ).indexOf( lower ) === ( await rowIds() ).indexOf( upper ) + 1 );
+
+			ajax.length = 0;
+			await keyboardMove( lower, [ 'ArrowLeft' ] );
+			ok( 'Left Arrow moves it back out and saves', await waitToast( 'saved' ) && 0 === parentOf( lower ) );
+
+			ajax.length = 0;
+			await page.focus( `#${ lower } .scpo-handle` );
+			await page.keyboard.press( 'Space' );
+			await page.keyboard.press( 'ArrowRight' );
+			await page.keyboard.press( 'Escape' );
+			await sleep( 500 );
+			ok( 'Escape undoes a nesting without saving', 0 === parentOf( lower ) && 0 === await levelOfRow( lower ) && ajax.filter( ( a ) => a.action === 'update-menu-order' ).length === 0 );
+
+			await page.reload( { waitUntil: 'networkidle2' } );
+			const rowsNow = await rowIds();
+			const third = rowsNow[ rowsNow.indexOf( lower ) + 1 ];
+			ajax.length = 0;
+			await mouseDrag( `#${ third } .scpo-handle`, `#${ upper }`, true );
+			await waitToast( 'saved' );
+			ok( 'a plain vertical drag only reorders, even with the feature on', 0 === parentOf( third ) && ! /parents/.test( ( ajax.find( ( a ) => a.action === 'update-menu-order' ) || {} ).body || '' ) );
+
+			await page.reload( { waitUntil: 'networkidle2' } );
+			pair = await leafPair();
+			ajax.length = 0;
+			await sideways( pair[ 1 ], 70, 2 );
+			ok( 'dragging a row 70px to the right nests it', await waitToast( 'saved' ) && idNum( pair[ 0 ] ) === parentOf( pair[ 1 ] ) );
+			wp( `wp_update_post(array("ID"=>${ idNum( pair[ 1 ] ) },"post_parent"=>0)); echo 1;` );
+		}
+
+		// A parent page takes its children with it.
+		await page.goto( B + '/edit.php?post_type=page', { waitUntil: 'networkidle2' } );
+		const withKids = await page.$$eval( '#the-list > tr[id]', ( rows ) => {
+			const lv = ( r ) => Number( ( r.className.match( /level-(\d+)/ ) || [ 0, 0 ] )[ 1 ] );
+			for ( let i = 1; i + 1 < rows.length; i++ ) {
+				if ( lv( rows[ i ] ) !== 0 || lv( rows[ i + 1 ] ) !== 1 ) continue;
+				let above = i - 1;
+				while ( above >= 0 && lv( rows[ above ] ) !== 0 ) above--; // the previous top-level sibling
+				if ( above < 0 ) continue;
+				const kids = [];
+				for ( let k = i + 1; k < rows.length && lv( rows[ k ] ) > 0; k++ ) kids.push( rows[ k ].id );
+				return { above: rows[ above ].id, parent: rows[ i ].id, kids };
+			}
+			return null;
+		} );
+		if ( ! withKids ) {
+			ok( 'found a parent page with children that has a top-level page above it', false );
+		} else {
+			await keyboardMove( withKids.parent, [ 'ArrowRight' ] );
+			ok( 'a page with children can be nested', await waitToast( 'saved' ) && idNum( withKids.above ) === parentOf( withKids.parent ) );
+			ok( 'its children stay its children', withKids.kids.every( ( k ) => idNum( withKids.parent ) === parentOf( k ) ) );
+			await page.reload( { waitUntil: 'networkidle2' } );
+			ok( 'its children render one level deeper', ( await Promise.all( withKids.kids.map( levelOfRow ) ) ).every( ( l ) => l >= 2 ) );
+			await keyboardMove( withKids.parent, [ 'ArrowLeft' ] );
+			ok( 'and it can be moved back out with them', await waitToast( 'saved' ) && 0 === parentOf( withKids.parent ) && withKids.kids.every( ( k ) => idNum( withKids.parent ) === parentOf( k ) ) );
+		}
+
+		// The server refusing a parent: the list asks for a reload and forgets the move.
+		await page.goto( B + '/edit.php?post_type=page', { waitUntil: 'networkidle2' } );
+		pair = await leafPair();
+		const blogPost = Number( wp( 'global $wpdb; echo (int) $wpdb->get_var("SELECT ID FROM $wpdb->posts WHERE post_type=\'post\' AND post_status=\'publish\' LIMIT 1");' ) );
+		const forge = ( req ) => {
+			if ( req.url().includes( 'admin-ajax.php' ) && req.method() === 'POST' && /action=update-menu-order/.test( req.postData() || '' ) ) {
+				const body = ( req.postData() || '' ).replace( /parents%5B(\d+)%5D=\d+/, ( m, id ) => `parents%5B${ id }%5D=${ blogPost }` );
+				req.continue( { postData: body } );
+			} else {
+				req.continue();
+			}
+		};
+		await page.setRequestInterception( true );
+		page.on( 'request', forge );
+		ajax.length = 0;
+		await keyboardMove( pair[ 1 ], [ 'ArrowRight' ] );
+		const refused = await waitToast( 'error' );
+		page.off( 'request', forge );
+		await page.setRequestInterception( false );
+		ok( 'a refused parent shows an error with a Reload button', refused && /Reload/.test( await page.$eval( '.scpo-toast', ( t ) => t.textContent ) ), await page.$eval( '.scpo-toast', ( t ) => t.textContent ).catch( () => '' ) );
+		ok( 'nothing was changed by the refused request', 0 === parentOf( pair[ 1 ] ) );
+		// The list shows a hierarchy that is not stored, so leaving the page warns;
+		// the toast's Reload button clears that warning first.
+		await Promise.all( [ page.waitForNavigation( { waitUntil: 'networkidle2' } ), page.click( '.scpo-toast__retry' ) ] );
+		ok( 'the Reload button reloads without an unsaved-changes prompt', 0 === await levelOfRow( pair[ 1 ] ) );
+		const rowsAfter = await rowIds();
+		ajax.length = 0;
+		await keyboardMove( rowsAfter[ rowsAfter.length - 1 ], [ 'ArrowUp' ] );
+		await waitToast( 'saved' );
+		ok( 'the next save does not resend the refused move', ! /parents/.test( ( ajax.find( ( a ) => a.action === 'update-menu-order' ) || {} ).body || '' ) );
+
+		// Categories.
+		await page.goto( B + '/edit-tags.php?taxonomy=category', { waitUntil: 'networkidle2' } );
+		const catPair = await leafPair();
+		if ( ! catPair ) {
+			ok( 'found two adjacent top-level categories without children', false );
+		} else {
+			await sideways( catPair[ 1 ], 70, 2 );
+			ok( 'dragging a category to the right nests it', await waitToast( 'saved' ) && idNum( catPair[ 0 ] ) === termParentOf( catPair[ 1 ] ) );
+			await page.reload( { waitUntil: 'networkidle2' } );
+			await keyboardMove( catPair[ 1 ], [ 'ArrowLeft' ] );
+			ok( 'Left Arrow moves the category back out', await waitToast( 'saved' ) && 0 === termParentOf( catPair[ 1 ] ) );
+		}
+	} finally {
+		wp( `update_option("scporder_options", json_decode(${ JSON.stringify( reparentOpts ) }, true)); echo 1;` );
+		wp( `global $wpdb; foreach (json_decode(${ JSON.stringify( pageRows ) }, true) as $r) { $wpdb->update($wpdb->posts, array("post_parent"=>(int)$r["post_parent"],"menu_order"=>(int)$r["menu_order"],"post_name"=>$r["post_name"]), array("ID"=>(int)$r["ID"])); clean_post_cache((int)$r["ID"]); } echo 1;` );
+		wp( `global $wpdb; foreach (json_decode(${ JSON.stringify( catRows ) }, true) as $r) { $wpdb->update($wpdb->term_taxonomy, array("parent"=>(int)$r["parent"]), array("term_id"=>(int)$r["term_id"],"taxonomy"=>"category")); $wpdb->update($wpdb->terms, array("term_order"=>(int)$r["term_order"]), array("term_id"=>(int)$r["term_id"])); clean_term_cache((int)$r["term_id"], "category"); } delete_option("category_children"); echo 1;` );
+	}
+
 	/* ---------------- Settings form round-trip ---------------- */
 	console.log( '\n== Settings form ==' );
 	await page.goto( B + '/options-general.php?page=scporder-settings', { waitUntil: 'networkidle2' } );
