@@ -3,7 +3,7 @@
  * Plugin Name: Simple Custom Post Order
  * Plugin URI: https://wordpress.org/plugins/simple-custom-post-order/
  * Description: Order posts, pages, custom post types, and taxonomies with a simple drag and drop interface.
- * Version: 2.8.12.1
+ * Version: 2.8.12
  * Author: Colorlib
  * Author URI: https://colorlib.com/
  * Requires at least: 6.2
@@ -39,7 +39,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 define( 'SCPORDER_URL', plugins_url( '', __FILE__ ) );
 define( 'SCPORDER_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SCPORDER_VERSION', '2.8.12.1' );
+define( 'SCPORDER_VERSION', '2.8.12' );
 
 $scporder = new SCPO_Engine();
 
@@ -481,7 +481,6 @@ class SCPO_Engine {
 				/* translators: %1$s: item title. */
 				'atBottom'     => __( '%1$s can’t move down any further.', 'simple-custom-post-order' ),
 				'retry'        => __( 'Retry', 'simple-custom-post-order' ),
-				'reload'       => __( 'Reload', 'simple-custom-post-order' ),
 				'parentFailed' => __( 'Couldn’t change the parent — reload to see the saved hierarchy', 'simple-custom-post-order' ),
 				'instructionsNest' => __( 'Use the Left and Right arrow keys to nest or un-nest the item.', 'simple-custom-post-order' ),
 				/* translators: 1: item title, 2: title of its new parent. */

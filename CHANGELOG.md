@@ -5,7 +5,7 @@ WordPress.org-formatted history lives in [`readme.txt`](readme.txt); this file m
 recent releases in [Keep a Changelog](https://keepachangelog.com/) style and follows
 [Semantic Versioning](https://semver.org/).
 
-## [2.8.12.1] - Unreleased
+## [Unreleased]
 
 ### Added
 - **Change the parent by dragging.** On hierarchical post types and taxonomies the SortableJS engine now lets a row be dragged sideways to nest it (one level per 28 px) or move it back out. While dragging, the row's `level-N` class and "— " dashes preview the result, on both the placeholder and the floating row. `parentChain()` offers only the parents that keep the flat, depth-first list a valid tree (the row above or one of its ancestors, never above the next row's own parent), and with no sideways travel a row keeps its parent whenever that is still possible, so ordinary reordering never re-parents anything by accident. The row's subtree moves with it. Keyboard: Right / Left Arrow while a row is grabbed (`nest()`), mirrored in RTL, announced through the live region; Escape restores the level too.

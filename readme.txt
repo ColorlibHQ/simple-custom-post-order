@@ -333,12 +333,6 @@ Deactivating leaves everything in place, so reactivating restores your order. De
 
 == Changelog ==
 
-= 2.8.12.1 =
-
-**New**
-
-* Change an item's **parent by dragging**. On hierarchical post types (Pages) and taxonomies (Categories) drag a row to the right to nest it under the item above, or to the left to move it back out. The dashes in front of the title preview where it will land, children travel with their parent, and only positions that keep the tree valid are offered. Keyboard: grab a row and press Right / Left Arrow. Switch it off under Settings > SCPOrder > Parent / child.
-
 = 2.8.12 - 2026-11-03 =
 
 * Fixed WooCommerce product category drags that showed "Order saved" but snapped back on reload, or reported "The order changed in another window". WooCommerce's own category sorter (the ☰ handle) ran alongside ours; it is now switched off wherever this plugin orders the list.
