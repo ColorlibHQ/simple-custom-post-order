@@ -3,7 +3,7 @@
  * Plugin Name: Simple Custom Post Order
  * Plugin URI: https://wordpress.org/plugins/simple-custom-post-order/
  * Description: Order posts, pages, custom post types, and taxonomies with a simple drag and drop interface.
- * Version: 2.8.12
+ * Version: 2.9.0
  * Author: Colorlib
  * Author URI: https://colorlib.com/
  * Requires at least: 6.2
@@ -39,7 +39,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 define( 'SCPORDER_URL', plugins_url( '', __FILE__ ) );
 define( 'SCPORDER_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SCPORDER_VERSION', '2.8.12' );
+define( 'SCPORDER_VERSION', '2.9.0' );
 
 $scporder = new SCPO_Engine();
 
@@ -1826,7 +1826,7 @@ class SCPO_Engine {
 					'show_advanced_view' => '',
 					'engine'             => 'sortable',
 					'show_handle'        => '1',
-					'allow_reparent'     => '1',
+					'allow_reparent'     => '0',
 					'new_post_position'  => 'top',
 					'allowed_roles'      => [],
 					'order_column'       => '',
@@ -1962,7 +1962,7 @@ class SCPO_Engine {
 			'show_advanced_view' => '',
 			'engine'             => 'sortable',
 			'show_handle'        => '1',
-			'allow_reparent'     => '1',
+			'allow_reparent'     => '0',
 			'new_post_position'  => 'top',
 			'allowed_roles'      => [],
 			'order_column'       => '',
@@ -1997,13 +1997,17 @@ class SCPO_Engine {
 			$sanitized['show_handle'] = ( isset( $input['show_handle'] ) && '0' === (string) $input['show_handle'] ) ? '0' : '1';
 		}
 
-		// Change-parent-by-dragging toggle, which defaults to on. Same rule as
-		// show_handle: from the settings form an unchecked box is absent, while
-		// any other writer that omits the key must not switch the feature off.
+		// Change-parent-by-dragging toggle, which defaults to off: a stray
+		// sideways wobble while dragging would otherwise move a page under
+		// another and change its URL. From the settings form an unchecked box is
+		// absent; any other writer that omits the key keeps the stored choice.
 		if ( ! empty( $input['_scpo_form'] ) ) {
 			$sanitized['allow_reparent'] = ! empty( $input['allow_reparent'] ) ? '1' : '0';
+		} elseif ( isset( $input['allow_reparent'] ) ) {
+			$sanitized['allow_reparent'] = '1' === (string) $input['allow_reparent'] ? '1' : '0';
 		} else {
-			$sanitized['allow_reparent'] = ( isset( $input['allow_reparent'] ) && '0' === (string) $input['allow_reparent'] ) ? '0' : '1';
+			$stored                      = get_option( 'scporder_options', [] );
+			$sanitized['allow_reparent'] = ( is_array( $stored ) && isset( $stored['allow_reparent'] ) && '1' === $stored['allow_reparent'] ) ? '1' : '0';
 		}
 
 		// Where newly created items are placed in the order.
@@ -2276,14 +2280,14 @@ class SCPO_Engine {
 	 */
 	public function render_reparent_field(): void {
 		$options = get_option( 'scporder_options', [] );
-		$on      = ! isset( $options['allow_reparent'] ) || '0' !== $options['allow_reparent'];
+		$on      = isset( $options['allow_reparent'] ) && '1' === $options['allow_reparent'];
 
 		printf(
 			'<label><input type="checkbox" name="scporder_options[allow_reparent]" value="1" %s /> %s</label>',
 			checked( $on, true, false ),
 			esc_html__( 'Let me change an item’s parent by dragging it sideways', 'simple-custom-post-order' )
 		);
-		echo '<p class="description">' . esc_html__( 'On hierarchical post types (such as Pages) and taxonomies (such as Categories), drag a row to the right to nest it under the item above, or to the left to move it back out — the dashes in front of the title show where it will land. With the keyboard, grab a row and press the Right or Left arrow key. Applies to the Modern engine. Developers can override with the scpo_allow_reparent filter.', 'simple-custom-post-order' ) . '</p>';
+		echo '<p class="description">' . esc_html__( 'On hierarchical post types (such as Pages) and taxonomies (such as Categories), drag a row to the right to nest it under the item above, or to the left to move it back out — the dashes in front of the title show where it will land. With the keyboard, grab a row and press the Right or Left arrow key. Off by default. Applies to the Modern engine. Developers can override with the scpo_allow_reparent filter.', 'simple-custom-post-order' ) . '</p>';
 	}
 
 	/**
@@ -2370,7 +2374,7 @@ class SCPO_Engine {
 	 */
 	public function reparent_enabled(): bool {
 		$o  = get_option( 'scporder_options', [] );
-		$on = ! isset( $o['allow_reparent'] ) || '0' !== $o['allow_reparent'];
+		$on = isset( $o['allow_reparent'] ) && '1' === $o['allow_reparent'];
 
 		/**
 		 * Filters whether drag-and-drop may change an item's parent.
