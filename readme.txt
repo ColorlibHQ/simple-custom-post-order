@@ -4,7 +4,7 @@ Tags: post order, custom post order, sort posts, reorder posts, drag drop order
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 7.2
-Stable tag: 2.9.0
+Stable tag: 2.9.1
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -332,6 +332,11 @@ Deactivating leaves everything in place, so reactivating restores your order. De
 3. Settings page - select the post types and taxonomies to sort
 
 == Changelog ==
+
+= 2.9.1 - 2026-11-26 =
+
+* The *Parent / child* setting now says what nesting does to a page's address: moving a published page under another page changes its URL, and WordPress does not redirect the old one. The feature stays off unless you switch it on.
+* Cleared the remaining errors reported by the WordPress Plugin Check tool. They were checks the tool could not follow (the plugin's own table, column and savepoint names, and numbers printed as numbers); how orders are saved is unchanged.
 
 = 2.9.0 - 2026-11-26 =
 
@@ -739,6 +744,9 @@ Note: full parent/child ordering (keeping a drag within its own level) is still 
 * Initial release
 
 == Upgrade Notice ==
+
+= 2.9.1 =
+Explains in the opt-in Parent / child setting that nesting a page changes its URL, and clears Plugin Check's remaining errors. How orders are saved is unchanged.
 
 = 2.9.0 =
 Adds optional drag-to-nest for Pages and Categories (off by default; turn on under Settings → SCPOrder). Tested with WordPress 7.2 and PHP 8.6.

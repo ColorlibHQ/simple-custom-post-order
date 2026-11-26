@@ -3,7 +3,7 @@
  * Plugin Name: Simple Custom Post Order
  * Plugin URI: https://wordpress.org/plugins/simple-custom-post-order/
  * Description: Order posts, pages, custom post types, and taxonomies with a simple drag and drop interface.
- * Version: 2.9.0
+ * Version: 2.9.1
  * Author: Colorlib
  * Author URI: https://colorlib.com/
  * Requires at least: 6.2
@@ -39,7 +39,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 define( 'SCPORDER_URL', plugins_url( '', __FILE__ ) );
 define( 'SCPORDER_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SCPORDER_VERSION', '2.9.0' );
+define( 'SCPORDER_VERSION', '2.9.1' );
 
 $scporder = new SCPO_Engine();
 
@@ -1010,13 +1010,14 @@ class SCPO_Engine {
 	private function finish_order_transaction( array $transaction, bool $commit ): bool {
 		global $wpdb;
 		if ( $transaction['owned'] ) {
-			return false !== $wpdb->query( $commit ? 'COMMIT' : 'ROLLBACK' );
+			return false !== ( $commit ? $wpdb->query( 'COMMIT' ) : $wpdb->query( 'ROLLBACK' ) );
 		}
+		// begin_order_transaction() builds the name: 'scpo_order_' plus a counter, never input.
 		$name = $transaction['name'];
-		if ( ! $commit && false === $wpdb->query( "ROLLBACK TO SAVEPOINT $name" ) ) {
+		if ( ! $commit && false === $wpdb->query( "ROLLBACK TO SAVEPOINT $name" ) ) { // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter -- internal savepoint name, see above.
 			return false;
 		}
-		return false !== $wpdb->query( "RELEASE SAVEPOINT $name" );
+		return false !== $wpdb->query( "RELEASE SAVEPOINT $name" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter -- internal savepoint name, see above.
 	}
 
 	/** A conflict is recoverable by reloading, never by overwriting another save. */
@@ -1072,7 +1073,7 @@ class SCPO_Engine {
 		foreach ( array_chunk( $current, 1000, true ) as $expected ) {
 			$in = implode( ', ', array_fill( 0, count( $expected ), '%d' ) );
 			$rows = $wpdb->get_results( $wpdb->prepare(
-				"SELECT $id_column, $order_column FROM $table WHERE $id_column IN ($in) ORDER BY $id_column FOR UPDATE",
+				"SELECT $id_column, $order_column FROM $table WHERE $id_column IN ($in) ORDER BY $id_column FOR UPDATE", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter -- table/column names are the posts or terms identifiers passed by this class; $in is a generated %d list and every value is bound.
 				array_keys( $expected )
 			), ARRAY_N );
 			$read_failed = $wpdb->last_error || ! is_array( $rows );
@@ -1163,7 +1164,7 @@ class SCPO_Engine {
 		$missing = array_diff_key( $changed, $current );
 		if ( $missing ) {
 			$in = implode( ', ', array_fill( 0, count( $missing ), '%d' ) );
-			$rows = $wpdb->get_results( $wpdb->prepare( "SELECT $id_column, $order_column FROM $table WHERE $id_column IN ($in)", array_keys( $missing ) ), ARRAY_N );
+			$rows = $wpdb->get_results( $wpdb->prepare( "SELECT $id_column, $order_column FROM $table WHERE $id_column IN ($in)", array_keys( $missing ) ), ARRAY_N ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter -- same identifiers and generated %d list as above.
 			if ( $wpdb->last_error || ! is_array( $rows ) ) {
 				return new WP_Error( 'scpo_order_read_failed', __( 'Could not read the current order. Please try again.', 'simple-custom-post-order' ) );
 			}
@@ -2287,7 +2288,7 @@ class SCPO_Engine {
 			checked( $on, true, false ),
 			esc_html__( 'Let me change an item’s parent by dragging it sideways', 'simple-custom-post-order' )
 		);
-		echo '<p class="description">' . esc_html__( 'On hierarchical post types (such as Pages) and taxonomies (such as Categories), drag a row to the right to nest it under the item above, or to the left to move it back out — the dashes in front of the title show where it will land. With the keyboard, grab a row and press the Right or Left arrow key. Off by default. Applies to the Modern engine. Developers can override with the scpo_allow_reparent filter.', 'simple-custom-post-order' ) . '</p>';
+		echo '<p class="description">' . esc_html__( 'On hierarchical post types (such as Pages) and taxonomies (such as Categories), drag a row to the right to nest it under the item above, or to the left to move it back out — the dashes in front of the title show where it will land. With the keyboard, grab a row and press the Right or Left arrow key. Moving a published page under another page changes its address (URL), and WordPress does not redirect the old address, so update any links to it. Off by default. Applies to the Modern engine. Developers can override with the scpo_allow_reparent filter.', 'simple-custom-post-order' ) . '</p>';
 	}
 
 	/**
@@ -2535,7 +2536,7 @@ class SCPO_Engine {
 		$sql          = "SELECT $aggregate(menu_order) FROM $wpdb->posts
 			WHERE post_type = %s AND ID <> %d AND post_status IN ($placeholders)";
 
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared -- $sql is built above from a hard-coded aggregate and a generated %s list; it is prepared right here.
 		$boundary = $wpdb->get_var( $wpdb->prepare( $sql, array_merge( [ $post->post_type, $post_id ], $statuses ) ) );
 
 		if ( null === $boundary ) {
@@ -2602,15 +2603,15 @@ class SCPO_Engine {
 			printf(
 				'<span class="scpo-order-static" title="%s">%d</span>',
 				esc_attr__( 'You do not have permission to reorder this item.', 'simple-custom-post-order' ),
-				$order
+				(int) $order
 			);
 			return;
 		}
 
 		printf(
 			'<input type="number" class="scpo-order-input small-text" value="%d" min="1" step="1" data-id="%d" aria-label="%s" />',
-			$order,
-			$post_id,
+			(int) $order,
+			(int) $post_id,
 			esc_attr__( 'Set position', 'simple-custom-post-order' )
 		);
 	}

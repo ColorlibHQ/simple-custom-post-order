@@ -5,6 +5,15 @@ WordPress.org-formatted history lives in [`readme.txt`](readme.txt); this file m
 recent releases in [Keep a Changelog](https://keepachangelog.com/) style and follows
 [Semantic Versioning](https://semver.org/).
 
+## [2.9.1] - 2026-11-26
+
+### Changed
+- The *Parent / child* setting's description now states that moving a published page under another page changes its URL and that WordPress does not redirect the old one (core keeps `_wp_old_slug` redirects for non-hierarchical types only). Found while testing 2.9.0: the old address of a nested page returns 404, while a nested category's old archive URL keeps working.
+- Plugin Check reports no errors. `finish_order_transaction()` issues `COMMIT`/`ROLLBACK` as literal statements; the internal savepoint name and the posts/terms table and column identifiers carry a documented `phpcs:ignore`; the order-column output casts its `%d` values. No SQL sent to the database changed.
+
+### Tests
+- The suites no longer assume the original dev site (see #159) and cover parent dragging: 22 regression and 24 Chrome checks. They pass on WordPress 6.2/PHP 7.4 through 7.2/PHP 8.6, on MariaDB 11 and MySQL 8.4, with a Redis object cache, with WooCommerce, and on a multisite subsite as a site admin.
+
 ## [2.9.0] - 2026-11-26
 
 ### Added
