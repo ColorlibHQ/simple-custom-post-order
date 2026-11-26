@@ -3,7 +3,7 @@ Contributors: silkalns
 Tags: post order, custom post order, sort posts, reorder posts, drag drop order
 Requires at least: 6.2
 Requires PHP: 7.4
-Tested up to: 7.1
+Tested up to: 7.2
 Stable tag: 2.8.12
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
