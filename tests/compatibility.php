@@ -125,13 +125,18 @@ try {
 
 		if ( 'InnoDB' !== $storage ) {
 			// Independent server sessions race two copies of the actual guarded SQL.
-			$socket = $host ? substr( $host, strpos( $host, ':' ) + 1 ) : ini_get( 'mysqli.default_socket' );
+			// Same host/port/socket parsing wpdb uses, so a TCP DB_HOST such as
+			// 127.0.0.1:3307 works as well as a local socket.
+			$parsed = $wpdb->parse_db_host( $host ? $host : DB_HOST );
+			$db_host = ( $parsed && '' !== (string) $parsed[0] ) ? $parsed[0] : 'localhost';
+			$port = ( $parsed && $parsed[1] ) ? (int) $parsed[1] : 0;
+			$socket = ( $parsed && $parsed[2] ) ? $parsed[2] : ini_get( 'mysqli.default_socket' );
 			$user = $host ? 'root' : DB_USER;
 			$password = $host ? '' : DB_PASSWORD;
 			$database = $host ? 'scpo_compat' : DB_NAME;
 			mysqli_report( MYSQLI_REPORT_OFF );
-			$left = mysqli_connect( 'localhost', $user, $password, $database, 0, $socket );
-			$right = mysqli_connect( 'localhost', $user, $password, $database, 0, $socket );
+			$left = mysqli_connect( $db_host, $user, $password, $database, $port, $socket );
+			$right = mysqli_connect( $db_host, $user, $password, $database, $port, $socket );
 			if ( ! $left || ! $right ) { throw new RuntimeException( 'Could not open independent race connections.' ); }
 			try {
 				$capture = static function ( $desired, $snapshot ) use ( $write, $table ) {
