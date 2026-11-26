@@ -3,7 +3,7 @@
  * Plugin Name: Simple Custom Post Order
  * Plugin URI: https://wordpress.org/plugins/simple-custom-post-order/
  * Description: Order posts, pages, custom post types, and taxonomies with a simple drag and drop interface.
- * Version: 2.9.0
+ * Version: 2.9.1
  * Author: Colorlib
  * Author URI: https://colorlib.com/
  * Requires at least: 6.2
@@ -39,7 +39,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 define( 'SCPORDER_URL', plugins_url( '', __FILE__ ) );
 define( 'SCPORDER_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SCPORDER_VERSION', '2.9.0' );
+define( 'SCPORDER_VERSION', '2.9.1' );
 
 $scporder = new SCPO_Engine();
 
