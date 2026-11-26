@@ -819,7 +819,9 @@ rollback();
 
 begin();
 // A reorder whose snapshot (relative order) no longer matches the database (another tab saved in
-// between). Submitting the stored order unchanged would be a harmless replay.
+// between). Submitting the stored order unchanged would be a harmless replay, and
+// tied values cannot be stale at all, so give the three rows distinct values first.
+foreach ( [ $pa => 1001, $pb => 1002, $pc => 1003 ] as $id => $value ) { $wpdb->update( $wpdb->posts, [ 'menu_order' => $value ], [ 'ID' => $id ] ); clean_post_cache( $id ); }
 $r = ajax( 'update_menu_order', [ 'nonce' => $nonce, 'order' => $pages_payload( [ $pc, $pa, $pb ] ), 'original_values' => wp_json_encode( [ $pa => 9003, $pb => 9002, $pc => 9001 ] ), 'parents' => [ $pb => $pa ] ] );
 t( 'a stale list refuses the parent change before anything is written', is_array( $r ) && empty( $r['success'] ) && ! empty( $r['data']['reload'] ) && 'parent' !== ( $r['data']['code'] ?? '' ) && 0 === $parent_of( $pb ), json_encode( $r ) );
 rollback();
