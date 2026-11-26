@@ -41,7 +41,9 @@ await page.setCookie( ...cookies );
 
 const jsErrors = [];
 page.on( 'pageerror', ( e ) => jsErrors.push( e.message ) );
-page.on( 'console', ( m ) => { if ( m.type() === 'error' && ! /favicon|net::ERR|Failed to load resource/.test( m.text() ) ) jsErrors.push( m.text() ); } );
+// Older cores (6.2's Heartbeat, TinyMCE) add unload listeners, which current Chrome reports
+// as a permissions-policy error on every screen; that is core's, not ours.
+page.on( 'console', ( m ) => { if ( m.type() === 'error' && ! /favicon|net::ERR|Failed to load resource|Permissions policy violation: unload/.test( m.text() ) ) jsErrors.push( m.text() ); } );
 
 const ajax = [];
 page.on( 'request', ( r ) => {
@@ -442,10 +444,13 @@ try {
 	const termParentOf = ( rowId ) => Number( wp( `clean_term_cache(${ idNum( rowId ) }); echo (int) get_term(${ idNum( rowId ) })->parent;` ) );
 	const levelOfRow = ( rowId ) => page.$eval( '#' + rowId, ( r ) => Number( ( r.className.match( /level-(\d+)/ ) || [ 0, 0 ] )[ 1 ] ) );
 	// Two adjacent top-level rows with no children, followed by another top-level row.
+	// Published ones: core's Quick Edit only offers published pages as a parent, so a
+	// draft parent (WooCommerce creates one) would show as "no parent" there.
 	const leafPair = () => page.$$eval( '#the-list > tr[id]', ( rows ) => {
 		const lv = ( r ) => Number( ( r.className.match( /level-(\d+)/ ) || [ 0, 0 ] )[ 1 ] );
+		const live = ( r ) => ! /status-(draft|pending|future|private)/.test( r.className );
 		for ( let i = 0; i + 2 < rows.length; i++ ) {
-			if ( lv( rows[ i ] ) === 0 && lv( rows[ i + 1 ] ) === 0 && lv( rows[ i + 2 ] ) === 0 ) return [ rows[ i ].id, rows[ i + 1 ].id ];
+			if ( lv( rows[ i ] ) === 0 && lv( rows[ i + 1 ] ) === 0 && lv( rows[ i + 2 ] ) === 0 && live( rows[ i ] ) && live( rows[ i + 1 ] ) ) return [ rows[ i ].id, rows[ i + 1 ].id ];
 		}
 		return null;
 	} );

@@ -55,7 +55,8 @@ ok "Order column inputs render on Posts" $([ "$col" -gt 0 ] && echo 1 || echo 0)
 colpg=$(get "edit.php?post_type=page" | grep -c 'scporder-order-column')
 ok "Order column script not loaded on hierarchical Pages" $([ "$colpg" -eq 0 ] && echo 1 || echo 0) "$colpg"
 html=$(get "edit.php")
-echo "$html" | grep -q '"ajax_url":"/wp-admin/admin-ajax.php"' && r=1 || r=0
+# WordPress before 6.5 escapes slashes in localized data ("\/wp-admin\/..."); both forms are root-relative.
+echo "$html" | grep -qE '"ajax_url":"(\\/|/)wp-admin(\\/|/)admin-ajax\.php"' && r=1 || r=0
 ok "localized ajax_url is root-relative" $r
 
 echo "== Settings page =="
