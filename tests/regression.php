@@ -746,6 +746,133 @@ if ( $sub ) {
 }
 
 /* Failure injection: exercise the real wpdb boundary without persisting writes. */
+section( 'Parent changes (drag sideways)' );
+$user_before = get_current_user_id();
+wp_set_current_user( (int) ( getenv( 'SCPO_USER' ) ?: 1 ) ); // earlier sections leave a non-admin user
+$nonce     = wp_create_nonce( 'scporder_nonce_action' );
+$why = static function ( $r ): string { return is_array( $r ) ? (string) ( $r['data']['code'] ?? $r['data']['message'] ?? '' ) : 'raw'; };
+$refused_as_parent = static function ( $r ): bool { return is_array( $r ) && empty( $r['success'] ) && 'parent' === ( $r['data']['code'] ?? '' ); };
+$parent_of = static function ( int $id ): int { clean_post_cache( $id ); return (int) get_post_field( 'post_parent', $id ); };
+$leaf_tops = static function ( int $n ) use ( $wpdb ): array {
+	return array_map( 'intval', $wpdb->get_col( "SELECT ID FROM $wpdb->posts p WHERE post_type='page' AND post_status='publish' AND post_parent=0 AND NOT EXISTS (SELECT 1 FROM $wpdb->posts c WHERE c.post_parent=p.ID AND c.post_type='page' AND c.post_status<>'trash') ORDER BY menu_order, ID LIMIT $n" ) );
+};
+$pages_payload = static function ( array $ids ): string { return implode( '&', array_map( static function ( $id ) { return 'post[]=' . $id; }, $ids ) ); };
+$tops = $leaf_tops( 3 ); // A, B, C: top-level pages without children, in list order
+[ $pa, $pb, $pc ] = $tops;
+$reparent_on = static function () { return true; };
+
+begin();
+$r = ajax( 'update_menu_order', [ 'nonce' => $nonce, 'order' => $pages_payload( $tops ), 'parents' => [ $pb => $pa ] ] );
+t( 'a parent change is refused while the setting is off', $refused_as_parent( $r ) && false !== stripos( $r['data']['message'], 'turned off' ) && 0 === $parent_of( $pb ), json_encode( $r ) );
+rollback();
+
+begin();
+$o = get_option( 'scporder_options' ); $o['allow_reparent'] = '1'; update_option( 'scporder_options', $o );
+add_filter( 'scpo_allow_reparent', '__return_false' );
+$r = ajax( 'update_menu_order', [ 'nonce' => $nonce, 'order' => $pages_payload( $tops ), 'parents' => [ $pb => $pa ] ] );
+remove_filter( 'scpo_allow_reparent', '__return_false' );
+t( 'the scpo_allow_reparent filter can switch the setting off', $refused_as_parent( $r ) && 0 === $parent_of( $pb ), json_encode( $r ) );
+rollback();
+
+add_filter( 'scpo_allow_reparent', $reparent_on );
+
+begin();
+$saves = 0;
+$count = static function () use ( &$saves ) { $saves++; };
+add_action( 'save_post_page', $count );
+$r = ajax( 'update_menu_order', [ 'nonce' => $nonce, 'order' => $pages_payload( $tops ), 'parents' => [ $pb => $pa ] ] );
+remove_action( 'save_post_page', $count );
+t( 'nesting a page under the row above makes it a child', ! empty( $r['success'] ) && $pa === $parent_of( $pb ), json_encode( $r ) );
+t( 'the parent change goes through wp_update_post (save hooks fire once)', 1 === $saves, "$saves save_post_page calls" );
+$r = ajax( 'update_menu_order', [ 'nonce' => $nonce, 'order' => $pages_payload( $tops ), 'parents' => [ $pb => 0 ] ] );
+t( 'moving it back out (parent 0) makes it top-level again', ! empty( $r['success'] ) && 0 === $parent_of( $pb ), json_encode( $r ) );
+rollback();
+
+begin();
+$before    = menu_orders( $tops );
+$blog_post = (int) $wpdb->get_var( "SELECT ID FROM $wpdb->posts WHERE post_type='post' AND post_status='publish' LIMIT 1" );
+$reordered = [ $pc, $pa, $pb ];
+$r = ajax( 'update_menu_order', [ 'nonce' => $nonce, 'order' => $pages_payload( $reordered ), 'parents' => [ $pb => $blog_post ] ] );
+t( 'a post of another type cannot become the parent', $refused_as_parent( $r ) && 0 === $parent_of( $pb ), json_encode( $r ) );
+t( 'a refused parent leaves the order unwritten too', $before == menu_orders( $tops ) );
+$r = ajax( 'update_menu_order', [ 'nonce' => $nonce, 'order' => $pages_payload( $tops ), 'parents' => [ $pb => 999999999 ] ] );
+t( 'a missing parent is refused', $refused_as_parent( $r ) && 0 === $parent_of( $pb ), $why( $r ) );
+$r = ajax( 'update_menu_order', [ 'nonce' => $nonce, 'order' => $pages_payload( $tops ), 'parents' => [ $pb => $pb ] ] );
+t( 'a page cannot be its own parent', $refused_as_parent( $r ) && 0 === $parent_of( $pb ), $why( $r ) );
+$r = ajax( 'update_menu_order', [ 'nonce' => $nonce, 'order' => $pages_payload( $tops ), 'parents' => [ 999999998 => 0 ] ] );
+t( 'a row outside the submitted order cannot be moved', is_array( $r ) && empty( $r['success'] ) && 'Permission denied.' === ( $r['data']['message'] ?? '' ), $why( $r ) );
+$r = ajax( 'update_menu_order', [ 'nonce' => $nonce, 'order' => $pages_payload( $tops ), 'parents' => [ $pb => '1 OR 1=1' ] ] );
+t( 'a non-numeric parent value is ignored, not cast', ! empty( $r['success'] ) && 0 === $parent_of( $pb ), json_encode( $r ) );
+rollback();
+
+begin();
+$wpdb->update( $wpdb->posts, [ 'post_parent' => $pb ], [ 'ID' => $pa ] ); clean_post_cache( $pa ); // A is now B's child
+$r = ajax( 'update_menu_order', [ 'nonce' => $nonce, 'order' => $pages_payload( [ $pb, $pa, $pc ] ), 'parents' => [ $pb => $pa ] ] );
+t( 'a page cannot move under its own child (no loops)', $refused_as_parent( $r ) && 0 === $parent_of( $pb ) && $pb === $parent_of( $pa ), json_encode( $r ) );
+rollback();
+
+begin();
+wp_trash_post( $pa );
+$r = ajax( 'update_menu_order', [ 'nonce' => $nonce, 'order' => $pages_payload( [ $pb, $pc ] ), 'parents' => [ $pb => $pa ] ] );
+t( 'a trashed page cannot become the parent', $refused_as_parent( $r ) && 0 === $parent_of( $pb ), $why( $r ) );
+rollback();
+
+begin();
+// A reorder whose snapshot (relative order) no longer matches the database (another tab saved in
+// between). Submitting the stored order unchanged would be a harmless replay.
+$r = ajax( 'update_menu_order', [ 'nonce' => $nonce, 'order' => $pages_payload( [ $pc, $pa, $pb ] ), 'original_values' => wp_json_encode( [ $pa => 9003, $pb => 9002, $pc => 9001 ] ), 'parents' => [ $pb => $pa ] ] );
+t( 'a stale list refuses the parent change before anything is written', is_array( $r ) && empty( $r['success'] ) && ! empty( $r['data']['reload'] ) && 'parent' !== ( $r['data']['code'] ?? '' ) && 0 === $parent_of( $pb ), json_encode( $r ) );
+rollback();
+
+begin();
+$blog = array_map( 'intval', $wpdb->get_col( "SELECT ID FROM $wpdb->posts WHERE post_type='post' AND post_status='publish' ORDER BY menu_order LIMIT 2" ) );
+$r = ajax( 'update_menu_order', [ 'nonce' => $nonce, 'order' => $pages_payload( $blog ), 'parents' => [ $blog[1] => $blog[0] ] ] );
+t( 'a non-hierarchical post type cannot be nested', $refused_as_parent( $r ) && 0 === $parent_of( $blog[1] ), json_encode( $r ) );
+rollback();
+
+begin();
+$editor = wp_insert_user( [ 'user_login' => 'scpo_editor_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'editor' ] );
+$author = wp_insert_user( [ 'user_login' => 'scpo_author_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'author' ] );
+$admin  = get_current_user_id();
+wp_set_current_user( $author );
+$r = ajax( 'update_menu_order', [ 'nonce' => wp_create_nonce( 'scporder_nonce_action' ), 'order' => $pages_payload( $tops ), 'parents' => [ $pb => $pa ] ] );
+t( 'an author, who cannot edit pages, cannot re-parent them', is_array( $r ) && empty( $r['success'] ) && 'Permission denied.' === ( $r['data']['message'] ?? '' ) && 0 === $parent_of( $pb ), $why( $r ) );
+wp_set_current_user( $editor );
+$r = ajax( 'update_menu_order', [ 'nonce' => wp_create_nonce( 'scporder_nonce_action' ), 'order' => $pages_payload( $tops ), 'parents' => [ $pb => $pa ] ] );
+t( 'an editor can re-parent pages', ! empty( $r['success'] ) && $pa === $parent_of( $pb ), json_encode( $r ) );
+wp_set_current_user( $admin );
+rollback();
+
+begin();
+// Same slug under the new parent: WordPress keeps sibling slugs unique, as in Quick Edit.
+$wpdb->update( $wpdb->posts, [ 'post_name' => 'scpo-same-slug' ], [ 'ID' => $pb ] );
+$twin = wp_insert_post( [ 'post_type' => 'page', 'post_status' => 'publish', 'post_title' => 'Twin', 'post_name' => 'scpo-same-slug', 'post_parent' => $pa ] );
+clean_post_cache( $pb );
+$r = ajax( 'update_menu_order', [ 'nonce' => $nonce, 'order' => $pages_payload( [ $pa, $twin, $pb, $pc ] ), 'parents' => [ $pb => $pa ] ] );
+clean_post_cache( $pb );
+t( 'a moved page whose slug a new sibling already uses gets a unique slug', ! empty( $r['success'] ) && $pa === $parent_of( $pb ) && 'scpo-same-slug' !== get_post( $pb )->post_name, get_post( $pb )->post_name );
+rollback();
+
+begin();
+$cats = array_map( 'intval', $wpdb->get_col( "SELECT t.term_id FROM $wpdb->terms t JOIN $wpdb->term_taxonomy tt ON t.term_id=tt.term_id WHERE tt.taxonomy='category' AND tt.parent=0 AND NOT EXISTS (SELECT 1 FROM $wpdb->term_taxonomy c WHERE c.parent=t.term_id) ORDER BY t.term_order, t.term_id LIMIT 3" ) );
+$tag_payload_rp = static function ( array $ids ): string { return implode( '&', array_map( static function ( $id ) { return 'tag[]=' . $id; }, $ids ) ); };
+$term_parent = static function ( int $id ): int { clean_term_cache( $id ); return (int) get_term( $id )->parent; };
+$r = ajax( 'update_menu_order_tags', [ 'nonce' => $nonce, 'order' => $tag_payload_rp( $cats ), 'parents' => [ $cats[1] => $cats[0] ] ] );
+t( 'nesting a category under the row above makes it a child', ! empty( $r['success'] ) && $cats[0] === $term_parent( $cats[1] ), json_encode( $r ) );
+$r = ajax( 'update_menu_order_tags', [ 'nonce' => $nonce, 'order' => $tag_payload_rp( $cats ), 'parents' => [ $cats[0] => $cats[1] ] ] );
+t( 'a category cannot move under its own child', $refused_as_parent( $r ) && 0 === $term_parent( $cats[0] ), json_encode( $r ) );
+$tag = (int) $wpdb->get_var( "SELECT term_id FROM $wpdb->term_taxonomy WHERE taxonomy='post_tag' LIMIT 1" );
+$r = ajax( 'update_menu_order_tags', [ 'nonce' => $nonce, 'order' => $tag_payload_rp( $cats ), 'parents' => [ $cats[2] => $tag ] ] );
+t( 'a term from another taxonomy cannot become the parent', $refused_as_parent( $r ) && 0 === $term_parent( $cats[2] ), json_encode( $r ) );
+$tags = array_map( 'intval', $wpdb->get_col( "SELECT term_id FROM $wpdb->term_taxonomy WHERE taxonomy='post_tag' LIMIT 2" ) );
+$r = ajax( 'update_menu_order_tags', [ 'nonce' => $nonce, 'order' => $tag_payload_rp( $tags ), 'parents' => [ $tags[1] => $tags[0] ] ] );
+t( 'a non-hierarchical taxonomy cannot be nested', $refused_as_parent( $r ) && 0 === $term_parent( $tags[1] ), json_encode( $r ) );
+rollback();
+
+remove_filter( 'scpo_allow_reparent', $reparent_on );
+wp_set_current_user( $user_before );
+
+/* ------------------------------------------------------------------ */
 section( 'Database failures and query opt-out' );
 $nonce = wp_create_nonce( 'scporder_nonce_action' );
 foreach ( [ 'update_menu_order', 'scpo_ajax_set_position', 'scpo_ajax_reset_order' ] as $method ) {
