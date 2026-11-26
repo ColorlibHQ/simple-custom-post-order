@@ -46,7 +46,10 @@ gotd=$(get "edit.php?post_status=draft" | grep -o 'id="post-[0-9]*"' | grep -o '
 wantd=$(wpe 'global $wpdb; echo implode(",",$wpdb->get_col("SELECT ID FROM $wpdb->posts WHERE post_type=\"post\" AND post_status=\"draft\" ORDER BY post_modified DESC")).",";')
 ok "Drafts view keeps core's most-recently-modified-first order" $([ "$gotd" = "$wantd" ] && echo 1 || echo 0) "got $gotd want $wantd"
 gotpg=$(get "edit.php?post_type=page" | grep -c 'id="post-[0-9]*"')
-ok "Pages list renders (core paginates trees at 20)" $([ "$gotpg" -ge 20 ] && echo 1 || echo 0) "$gotpg rows"
+# Core paginates the tree at 20; a site with fewer pages shows them all.
+totpg=$(wpe 'echo array_sum(array_map("intval",(array)wp_count_posts("page")))-(int)wp_count_posts("page")->trash-(int)wp_count_posts("page")->{"auto-draft"};')
+wantpg=$(( totpg < 20 ? totpg : 20 ))
+ok "Pages list renders (core paginates trees at 20)" $([ "$wantpg" -gt 0 ] && [ "$gotpg" -ge "$wantpg" ] && echo 1 || echo 0) "$gotpg rows, want $wantpg"
 col=$(get "edit.php" | grep -c 'scpo-order-input')
 ok "Order column inputs render on Posts" $([ "$col" -gt 0 ] && echo 1 || echo 0) "$col"
 colpg=$(get "edit.php?post_type=page" | grep -c 'scporder-order-column')

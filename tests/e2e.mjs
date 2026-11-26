@@ -302,6 +302,11 @@ try {
 	await page.goto( B + '/edit-tags.php?taxonomy=category', { waitUntil: 'networkidle2' } );
 	const categoryParent = await page.$eval( '#the-list tr.level-0', ( row ) => row.id.replace( /\D/g, '' ) );
 	const categoryName = 'scpo-beta-category-' + Date.now();
+	// Keyboard moves stay among siblings, so the new child needs one to move past.
+	// Seed it here instead of relying on the site's first category having children.
+	const siblingName = 'scpo-beta-sibling-' + Date.now();
+	wp( `$t=wp_insert_term(${ JSON.stringify( siblingName ) },"category",array("parent"=>${ Number( categoryParent ) })); echo is_wp_error($t)?0:1;` );
+	await page.reload( { waitUntil: 'networkidle2' } );
 	try {
 		await page.type( '#tag-name', categoryName );
 		await page.select( '#parent', categoryParent );
@@ -309,10 +314,17 @@ try {
 		await page.waitForFunction( ( name ) => Array.from( document.querySelectorAll( '#the-list .row-title' ) ).some( ( el ) => el.textContent.trim().endsWith( name ) ), {}, categoryName );
 		const addedCategory = await page.$$eval( '#the-list > tr[id]', ( rows, name ) => rows.find( ( row ) => row.querySelector( '.row-title' )?.textContent.trim().endsWith( name ) ).id, categoryName );
 		await page.waitForSelector( '#' + addedCategory + ' .scpo-handle' );
-		await keyboardMove( addedCategory, [ 'ArrowDown' ] );
+		// Move toward the sibling, wherever quick-add placed the new row among them.
+		const towardSibling = await page.$eval( '#' + addedCategory, ( row ) => {
+			const level = ( r ) => Number( ( r.className.match( /level-(\d+)/ ) || [ 0, 0 ] )[ 1 ] );
+			let next = row.nextElementSibling;
+			while ( next && level( next ) > level( row ) ) { next = next.nextElementSibling; }
+			return next && level( next ) === level( row ) ? 'ArrowDown' : 'ArrowUp';
+		} );
+		await keyboardMove( addedCategory, [ towardSibling ] );
 		ok( 'new child category can move after normalization without reloading', await waitToast( 'saved' ) );
 	} finally {
-		wp( `$term=get_term_by("name",${ JSON.stringify( categoryName ) },"category"); if($term) wp_delete_term($term->term_id,"category"); echo 1;` );
+		wp( `foreach(array(${ JSON.stringify( categoryName ) },${ JSON.stringify( siblingName ) }) as $n){ $term=get_term_by("name",$n,"category"); if($term) wp_delete_term($term->term_id,"category"); } echo 1;` );
 	}
 
 	/* ---------------- Tags ---------------- */

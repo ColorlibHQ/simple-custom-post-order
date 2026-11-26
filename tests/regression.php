@@ -292,7 +292,15 @@ $by_title = array_map( 'intval', $wpdb->get_col( "SELECT ID FROM $wpdb->posts WH
 $got      = array_map( 'intval', $wpdb->get_col( "SELECT ID FROM $wpdb->posts WHERE ID IN (" . implode( ',', $first3 ) . ') ORDER BY menu_order' ) );
 t( 'enabling Pages breaks Page Attributes ties by title (as WP showed them)', $got === $by_title, json_encode( $got ) . ' want ' . json_encode( $by_title ) );
 $zeros_first = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->posts WHERE post_type='page' AND post_status IN ('publish','draft') AND menu_order < (SELECT m FROM (SELECT MIN(menu_order) m FROM $wpdb->posts WHERE ID IN (" . implode( ',', $first3 ) . ')) x)' );
-t( 'enabling Pages keeps the existing order values as primary key', $zeros_first > 100 );
+// Existing values stay the primary key: no top-level page that was at 0 may end up
+// behind the three that were at 5 (the two moved to 9 belong behind them). Counted
+// from this site's data; the old "more than 100" only held for one dev site.
+$nines = array_map( 'intval', $wpdb->get_col( "SELECT ID FROM $wpdb->posts WHERE post_type='page' AND ID NOT IN (" . implode( ',', $first3 ) . ') ORDER BY ID LIMIT 2' ) );
+$min_three = (int) $wpdb->get_var( "SELECT MIN(menu_order) FROM $wpdb->posts WHERE ID IN (" . implode( ',', $first3 ) . ')' );
+$zero_tops = "FROM $wpdb->posts WHERE post_type='page' AND post_status IN ('publish','draft') AND post_parent=0 AND ID NOT IN (" . implode( ',', array_merge( $first3, $nines ) ) . ')';
+$zero_count = (int) $wpdb->get_var( "SELECT COUNT(*) $zero_tops" );
+$behind = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) $zero_tops AND menu_order > %d", $min_three ) );
+t( 'enabling Pages keeps the existing order values as primary key', $zero_count > 0 && 0 === $behind && $zeros_first >= $zero_count, "$behind of $zero_count zero-valued pages sorted behind the 5s" );
 rollback();
 
 begin();
@@ -447,7 +455,18 @@ if ( has_method( 'normalize_post_type' ) ) {
 	}
 	t( 'bulk invalidation (above threshold) drops every renumbered row', 0 === $stale, "$stale rows still cached" );
 	t( 'bulk invalidation does not call clean_post_cache per row', 0 === $cleaned, "$cleaned calls" );
-	t( 'fresh read after bulk renumber sees 1..N', 1 === (int) get_post( $ids[0] )->menu_order );
+	// Pages renumber in tree order, which only matches page_order()'s flat
+	// (menu_order, ID) order on an already-normalised tree, so check every row.
+	$db_values = menu_orders( $ids );
+	$fresh_mismatch = 0;
+	foreach ( $ids as $id ) {
+		if ( (int) get_post( $id )->menu_order !== (int) $db_values[ $id ] ) {
+			$fresh_mismatch++;
+		}
+	}
+	$numbers = array_map( 'intval', array_values( $db_values ) );
+	sort( $numbers );
+	t( 'fresh read after bulk renumber sees 1..N', 0 === $fresh_mismatch && $numbers === range( 1, count( $ids ) ), "$fresh_mismatch stale reads" );
 	rollback();
 } else {
 	t( 'refresh rewrites only the rows that change', false, 'normalize_post_type() missing' );
