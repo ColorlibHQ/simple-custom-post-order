@@ -4,7 +4,7 @@ Tags: post order, custom post order, sort posts, reorder posts, drag drop order
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 7.2
-Stable tag: 2.8.12
+Stable tag: 2.9.0
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -33,7 +33,7 @@ Easily reorder posts, pages, custom post types, and taxonomies with intuitive dr
 * **Custom Post Types** - Perfect for portfolios, team members, testimonials, products, events, FAQs, services, and more
 * **WooCommerce Products** - Manually sort products in your shop
 * **Taxonomies** - Reorder categories, tags, and custom taxonomies
-* **Parent / Child** - On hierarchical lists (Pages, Categories…), drag a row sideways to nest it under the item above or move it back out; the order and the new parent are saved together
+* **Parent / Child** (opt-in) - On hierarchical lists (Pages, Categories…), drag a row sideways to nest it under the item above or move it back out; the order and the new parent are saved together. Turn it on under Settings → SCPOrder
 
 **Intuitive Admin Interface**
 
@@ -332,6 +332,16 @@ Deactivating leaves everything in place, so reactivating restores your order. De
 3. Settings page - select the post types and taxonomies to sort
 
 == Changelog ==
+
+= 2.9.0 - 2026-11-26 =
+
+**New**
+
+* Change an item's **parent by dragging** (opt-in). On hierarchical post types such as Pages and taxonomies such as Categories, drag a row to the right to nest it under the item above, or to the left to move it back out. The dashes in front of the title preview where it will land, children move with their parent, and only positions that keep the tree valid are offered. With the keyboard, grab a row and press Right or Left Arrow. It is **off by default**, because changing a page's parent changes its URL. Turn it on under Settings → SCPOrder → Advanced Options → Parent / child. Props @jgramp.
+
+**Compatibility**
+
+* Tested with WordPress 7.2 and PHP 8.6.
 
 = 2.8.12 - 2026-11-03 =
 
@@ -729,6 +739,9 @@ Note: full parent/child ordering (keeping a drag within its own level) is still 
 * Initial release
 
 == Upgrade Notice ==
+
+= 2.9.0 =
+Adds optional drag-to-nest for Pages and Categories (off by default; turn on under Settings → SCPOrder). Tested with WordPress 7.2 and PHP 8.6.
 
 = 2.8.12 =
 Fixes WooCommerce category order (drags snapping back, the Product Categories widget), false "order changed in another window" errors, and reordering on MyISAM databases. Lists sorted by other code now show a notice. Query Loop can use the custom order.
