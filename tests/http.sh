@@ -55,15 +55,16 @@ ok "Order column inputs render on Posts" $([ "$col" -gt 0 ] && echo 1 || echo 0)
 colpg=$(get "edit.php?post_type=page" | grep -c 'scporder-order-column')
 ok "Order column script not loaded on hierarchical Pages" $([ "$colpg" -eq 0 ] && echo 1 || echo 0) "$colpg"
 html=$(get "edit.php")
-# WordPress before 6.5 escapes slashes in localized data ("\/wp-admin\/..."); both forms are root-relative.
-echo "$html" | grep -qE '"ajax_url":"(\\/|/)wp-admin(\\/|/)admin-ajax\.php"' && r=1 || r=0
+# Root-relative: no scheme or host. A subdirectory multisite subsite prefixes its path
+# (/sub/wp-admin/...), and WordPress before 6.5 escapes slashes in localized data.
+echo "$html" | grep -qE '"ajax_url":"(\\/|/)([^"\\/]+(\\/|/))*wp-admin(\\/|/)admin-ajax\.php"' && r=1 || r=0
 ok "localized ajax_url is root-relative" $r
 
 echo "== Settings page =="
 S=$(get "options-general.php?page=scporder-settings")
 echo "$S" | grep -q 'name="scporder_options\[_scpo_form\]"' && r=1 || r=0; ok "form carries the _scpo_form marker" $r
 echo "$S" | grep -q 'filter=5' && r=0 || r=1; ok "no five-star filter link" $r
-echo "$S" | grep -Eq 'url: "(\\)?/wp-admin(\\)?/admin-ajax.php"' && r=1 || r=0; ok "reset uses a root-relative ajax URL" $r
+echo "$S" | grep -Eq 'url: "(\\)?/([^"\\/]+(\\)?/)*wp-admin(\\)?/admin-ajax.php"' && r=1 || r=0; ok "reset uses a root-relative ajax URL" $r
 echo "$S" | grep -q 'scpo_reset_types\[\]" value="nav_menu_item"' && r=0 || r=1; ok "reset list excludes nav_menu_item" $r
 echo "$S" | grep -q 'Page Attributes' && r=1 || r=0; ok "reset warns about Page Attributes values" $r
 echo "$S" | grep -qi 'fatal\|warning:' && r=0 || r=1; ok "settings page has no PHP errors" $r

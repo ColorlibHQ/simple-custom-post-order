@@ -532,31 +532,30 @@ try {
 			wp( `wp_update_post(array("ID"=>${ idNum( pair[ 1 ] ) },"post_parent"=>0)); echo 1;` );
 		}
 
-		// A parent page takes its children with it.
+		// A parent page takes its children with it. The family is seeded here, so the
+		// check does not depend on where earlier sections left the site's page tree.
 		await page.goto( B + '/edit.php?post_type=page', { waitUntil: 'networkidle2' } );
-		const withKids = await page.$$eval( '#the-list > tr[id]', ( rows ) => {
-			const lv = ( r ) => Number( ( r.className.match( /level-(\d+)/ ) || [ 0, 0 ] )[ 1 ] );
-			for ( let i = 1; i + 1 < rows.length; i++ ) {
-				if ( lv( rows[ i ] ) !== 0 || lv( rows[ i + 1 ] ) !== 1 ) continue;
-				let above = i - 1;
-				while ( above >= 0 && lv( rows[ above ] ) !== 0 ) above--; // the previous top-level sibling
-				if ( above < 0 ) continue;
-				const kids = [];
-				for ( let k = i + 1; k < rows.length && lv( rows[ k ] ) > 0; k++ ) kids.push( rows[ k ].id );
-				return { above: rows[ above ].id, parent: rows[ i ].id, kids };
+		const family = await leafPair();
+		const seededKids = [];
+		try {
+			if ( ! family ) {
+				ok( 'found two adjacent top-level pages to build a family from', false );
+			} else {
+				for ( const kid of [ 'scpo-e2e-kid-a', 'scpo-e2e-kid-b' ] ) {
+					seededKids.push( Number( wp( `echo (int) wp_insert_post(array("post_type"=>"page","post_status"=>"publish","post_title"=>${ JSON.stringify( kid ) },"post_parent"=>${ idNum( family[ 1 ] ) }));` ) ) );
+				}
+				await page.reload( { waitUntil: 'networkidle2' } );
+				const kids = seededKids.map( ( k ) => 'post-' + k );
+				await keyboardMove( family[ 1 ], [ 'ArrowRight' ] );
+				ok( 'a page with children can be nested', await waitToast( 'saved' ) && idNum( family[ 0 ] ) === parentOf( family[ 1 ] ) );
+				ok( 'its children stay its children', kids.every( ( k ) => idNum( family[ 1 ] ) === parentOf( k ) ) );
+				await page.reload( { waitUntil: 'networkidle2' } );
+				ok( 'its children render one level deeper', ( await Promise.all( kids.map( levelOfRow ) ) ).every( ( l ) => l === 2 ) );
+				await keyboardMove( family[ 1 ], [ 'ArrowLeft' ] );
+				ok( 'and it can be moved back out with them', await waitToast( 'saved' ) && 0 === parentOf( family[ 1 ] ) && kids.every( ( k ) => idNum( family[ 1 ] ) === parentOf( k ) ) );
 			}
-			return null;
-		} );
-		if ( ! withKids ) {
-			ok( 'found a parent page with children that has a top-level page above it', false );
-		} else {
-			await keyboardMove( withKids.parent, [ 'ArrowRight' ] );
-			ok( 'a page with children can be nested', await waitToast( 'saved' ) && idNum( withKids.above ) === parentOf( withKids.parent ) );
-			ok( 'its children stay its children', withKids.kids.every( ( k ) => idNum( withKids.parent ) === parentOf( k ) ) );
-			await page.reload( { waitUntil: 'networkidle2' } );
-			ok( 'its children render one level deeper', ( await Promise.all( withKids.kids.map( levelOfRow ) ) ).every( ( l ) => l >= 2 ) );
-			await keyboardMove( withKids.parent, [ 'ArrowLeft' ] );
-			ok( 'and it can be moved back out with them', await waitToast( 'saved' ) && 0 === parentOf( withKids.parent ) && withKids.kids.every( ( k ) => idNum( withKids.parent ) === parentOf( k ) ) );
+		} finally {
+			seededKids.forEach( ( k ) => wp( `wp_delete_post(${ k }, true); echo 1;` ) );
 		}
 
 		// The server refusing a parent: the list asks for a reload and forgets the move.
