@@ -5,7 +5,7 @@ msgstr ""
 "Project-Id-Version: Simple Custom Post Order 2.8.12\n"
 "Report-Msgid-Bugs-To: "
 "https://wordpress.org/support/plugin/simple-custom-post-order\n"
-"POT-Creation-Date: 2026-11-03 10:10:57+00:00\n"
+"POT-Creation-Date: 2026-11-26 13:45:35+00:00\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -125,74 +125,102 @@ msgstr ""
 msgid "Settings"
 msgstr ""
 
-#: simple-custom-post-order.php:463
+#: simple-custom-post-order.php:465
 msgid "Saving order…"
 msgstr ""
 
-#: simple-custom-post-order.php:464
+#: simple-custom-post-order.php:466
 msgid "Order saved"
 msgstr ""
 
-#: simple-custom-post-order.php:465
+#: simple-custom-post-order.php:467
 msgid "Couldn’t save — please try again"
 msgstr ""
 
-#: simple-custom-post-order.php:467
+#: simple-custom-post-order.php:469
 #. translators: %1$s: item title.
 msgid "Reorder: %1$s"
 msgstr ""
 
-#: simple-custom-post-order.php:469
+#: simple-custom-post-order.php:471
 #. translators: 1: item title, 2: current row number, 3: total rows.
 msgid ""
 "Grabbed %1$s. Row %2$d of %3$d. Use the arrow keys to move, Space to drop, "
 "Escape to cancel."
 msgstr ""
 
-#: simple-custom-post-order.php:471
+#: simple-custom-post-order.php:473
 #. translators: 1: item title, 2: current row number, 3: total rows.
 msgid "%1$s. Row %2$d of %3$d."
 msgstr ""
 
-#: simple-custom-post-order.php:473
+#: simple-custom-post-order.php:475
 #. translators: 1: item title, 2: final row number, 3: total rows.
 msgid "%1$s dropped. Row %2$d of %3$d."
 msgstr ""
 
-#: simple-custom-post-order.php:475
+#: simple-custom-post-order.php:477
 #. translators: 1: item title, 2: restored row number, 3: total rows.
 msgid "Reorder cancelled. %1$s returned to row %2$d of %3$d."
 msgstr ""
 
-#: simple-custom-post-order.php:476
+#: simple-custom-post-order.php:478
 msgid ""
 "Press Space or Enter to grab. Use the arrow keys, Home and End to move, "
 "Space or Enter to drop, Escape to cancel."
 msgstr ""
 
-#: simple-custom-post-order.php:478
+#: simple-custom-post-order.php:480
 #. translators: %1$s: item title.
 msgid "%1$s can’t move up any further."
 msgstr ""
 
-#: simple-custom-post-order.php:480
+#: simple-custom-post-order.php:482
 #. translators: %1$s: item title.
 msgid "%1$s can’t move down any further."
 msgstr ""
 
-#: simple-custom-post-order.php:481
+#: simple-custom-post-order.php:483
 msgid "Retry"
 msgstr ""
 
-#: simple-custom-post-order.php:482
+#: simple-custom-post-order.php:484
+msgid "Couldn’t change the parent — reload to see the saved hierarchy"
+msgstr ""
+
+#: simple-custom-post-order.php:485
+msgid "Use the Left and Right arrow keys to nest or un-nest the item."
+msgstr ""
+
+#: simple-custom-post-order.php:487
+#. translators: 1: item title, 2: title of its new parent.
+msgid "%1$s is now a child of %2$s."
+msgstr ""
+
+#: simple-custom-post-order.php:489
+#. translators: %1$s: item title.
+msgid "%1$s is now at the top level."
+msgstr ""
+
+#: simple-custom-post-order.php:491
+#. translators: %1$s: item title.
+msgid "%1$s has no item above it to nest under."
+msgstr ""
+
+#: simple-custom-post-order.php:493
+#. translators: %1$s: item title.
+msgid "%1$s is already at the top level."
+msgstr ""
+
+#: simple-custom-post-order.php:494
 msgid "Dismiss"
 msgstr ""
 
-#: simple-custom-post-order.php:483
+#: simple-custom-post-order.php:495
 msgid "Reload list"
 msgstr ""
 
-#: simple-custom-post-order.php:484
+#: simple-custom-post-order.php:496
 msgid ""
 "Drag and drop is turned off here: this list is not shown in its custom "
 "order, so your theme or another plugin is sorting it. Saving would replace "
@@ -200,193 +228,218 @@ msgid ""
 "list (for example a pre_get_posts or get_terms filter) to reorder again."
 msgstr ""
 
-#: simple-custom-post-order.php:954
+#: simple-custom-post-order.php:966
 #. translators: 1: database table name, 2: storage engine name.
 msgid ""
 "Cannot safely reorder: the %1$s table uses %2$s. Ask your host or database "
 "administrator to back up the database and convert this table to InnoDB."
 msgstr ""
 
-#: simple-custom-post-order.php:966
+#: simple-custom-post-order.php:978
 msgid "Could not start a safe order update. Please try again."
 msgstr ""
 
-#: simple-custom-post-order.php:1012
+#: simple-custom-post-order.php:1024
 msgid ""
 "The order changed in another window or request. Reload the list before "
 "reordering."
 msgstr ""
 
-#: simple-custom-post-order.php:1078 simple-custom-post-order.php:1156
-#: simple-custom-post-order.php:1427 simple-custom-post-order.php:2420
+#: simple-custom-post-order.php:1090 simple-custom-post-order.php:1168
+#: simple-custom-post-order.php:1439 simple-custom-post-order.php:2689
 msgid "Could not read the current order. Please try again."
 msgstr ""
 
-#: simple-custom-post-order.php:1105 simple-custom-post-order.php:1206
+#: simple-custom-post-order.php:1117 simple-custom-post-order.php:1218
 msgid ""
 "Could not save the complete order. Reload the list to check its current "
 "order before trying again."
 msgstr ""
 
-#: simple-custom-post-order.php:1116
+#: simple-custom-post-order.php:1128
 msgid "Could not confirm the order was saved. Reload the list before trying again."
 msgstr ""
 
-#: simple-custom-post-order.php:1146
+#: simple-custom-post-order.php:1158
 msgid ""
 "The requested order is outside the supported range. Reload the list before "
 "trying again."
 msgstr ""
 
-#: simple-custom-post-order.php:1200
+#: simple-custom-post-order.php:1212
 msgid ""
 "This order is too large to save in one safe database request. Reduce the "
 "number of items shown and try again, or contact your site administrator."
 msgstr ""
 
-#: simple-custom-post-order.php:1351
+#: simple-custom-post-order.php:1363
 msgid "Plugin version"
 msgstr ""
 
-#: simple-custom-post-order.php:1352
+#: simple-custom-post-order.php:1364
 msgid "Posts table storage engine"
 msgstr ""
 
-#: simple-custom-post-order.php:1352 simple-custom-post-order.php:1353
+#: simple-custom-post-order.php:1364 simple-custom-post-order.php:1365
 msgid "Unknown (metadata unavailable)"
 msgstr ""
 
-#: simple-custom-post-order.php:1353
+#: simple-custom-post-order.php:1365
 msgid "Terms table storage engine"
 msgstr ""
 
-#: simple-custom-post-order.php:1354
+#: simple-custom-post-order.php:1366
 msgid "External object cache"
 msgstr ""
 
-#: simple-custom-post-order.php:1354 simple-custom-post-order.php:1355
+#: simple-custom-post-order.php:1366 simple-custom-post-order.php:1367
 msgid "Yes"
 msgstr ""
 
-#: simple-custom-post-order.php:1354 simple-custom-post-order.php:1355
+#: simple-custom-post-order.php:1366 simple-custom-post-order.php:1367
 msgid "No"
 msgstr ""
 
-#: simple-custom-post-order.php:1355
+#: simple-custom-post-order.php:1367
 msgid "Database drop-in (db.php)"
 msgstr ""
 
-#: simple-custom-post-order.php:1377 simple-custom-post-order.php:1400
-#: simple-custom-post-order.php:1411 simple-custom-post-order.php:1602
-#: simple-custom-post-order.php:2384 simple-custom-post-order.php:2398
-#: simple-custom-post-order.php:2944
+#: simple-custom-post-order.php:1389 simple-custom-post-order.php:1412
+#: simple-custom-post-order.php:1423 simple-custom-post-order.php:1612
+#: simple-custom-post-order.php:1711 simple-custom-post-order.php:1804
+#: simple-custom-post-order.php:2653 simple-custom-post-order.php:2667
+#: simple-custom-post-order.php:3213
 msgid "Permission denied."
 msgstr ""
 
-#: simple-custom-post-order.php:1385 simple-custom-post-order.php:1470
+#: simple-custom-post-order.php:1397 simple-custom-post-order.php:1482
 msgid "Invalid data."
 msgstr ""
 
-#: simple-custom-post-order.php:1430 simple-custom-post-order.php:1465
-#: simple-custom-post-order.php:1485 simple-custom-post-order.php:2424
+#: simple-custom-post-order.php:1442 simple-custom-post-order.php:1477
+#: simple-custom-post-order.php:1497 simple-custom-post-order.php:2693
 msgid "The list has changed. Reload it before reordering."
 msgstr ""
 
-#: simple-custom-post-order.php:1516 simple-custom-post-order.php:2454
+#: simple-custom-post-order.php:1547 simple-custom-post-order.php:2723
 msgid "Order updated."
 msgstr ""
 
-#: simple-custom-post-order.php:1637
+#: simple-custom-post-order.php:1593
+msgid "Changing the parent by dragging is turned off."
+msgstr ""
+
+#: simple-custom-post-order.php:1639 simple-custom-post-order.php:1705
+msgid "This item cannot have a parent."
+msgstr ""
+
+#: simple-custom-post-order.php:1652 simple-custom-post-order.php:1714
+msgid "That item cannot be used as a parent."
+msgstr ""
+
+#: simple-custom-post-order.php:1678
+msgid "The parent could not be changed."
+msgstr ""
+
+#: simple-custom-post-order.php:1686 simple-custom-post-order.php:1739
+msgid "An item cannot be placed inside itself."
+msgstr ""
+
+#: simple-custom-post-order.php:1840
 msgid "Sortable Post Types"
 msgstr ""
 
-#: simple-custom-post-order.php:1644 simple-custom-post-order.php:1660
+#: simple-custom-post-order.php:1847 simple-custom-post-order.php:1863
 msgid "Enable sorting for:"
 msgstr ""
 
-#: simple-custom-post-order.php:1653
+#: simple-custom-post-order.php:1856
 msgid "Sortable Taxonomies"
 msgstr ""
 
-#: simple-custom-post-order.php:1669
+#: simple-custom-post-order.php:1872
 msgid "Drag & Drop Engine"
 msgstr ""
 
-#: simple-custom-post-order.php:1676 simple-custom-post-order.php:1970
+#: simple-custom-post-order.php:1879 simple-custom-post-order.php:2191
 msgid "Sorting engine"
 msgstr ""
 
-#: simple-custom-post-order.php:1684
+#: simple-custom-post-order.php:1887
 msgid "Drag handle"
 msgstr ""
 
-#: simple-custom-post-order.php:1693
+#: simple-custom-post-order.php:1896
 msgid "Advanced Options"
 msgstr ""
 
-#: simple-custom-post-order.php:1700
+#: simple-custom-post-order.php:1903
 msgid "Advanced View"
 msgstr ""
 
-#: simple-custom-post-order.php:1708 simple-custom-post-order.php:2059
+#: simple-custom-post-order.php:1911 simple-custom-post-order.php:2297
 msgid "New items"
 msgstr ""
 
-#: simple-custom-post-order.php:1716
+#: simple-custom-post-order.php:1919
+msgid "Parent / child"
+msgstr ""
+
+#: simple-custom-post-order.php:1927
 msgid "Order column"
 msgstr ""
 
-#: simple-custom-post-order.php:1724 simple-custom-post-order.php:2098
+#: simple-custom-post-order.php:1935 simple-custom-post-order.php:2336
 msgid "Who can reorder"
 msgstr ""
 
-#: simple-custom-post-order.php:1864
+#: simple-custom-post-order.php:2085
 msgid "Select which post types should have drag-and-drop sorting enabled."
 msgstr ""
 
-#: simple-custom-post-order.php:1889
+#: simple-custom-post-order.php:2110
 msgid "Post Types"
 msgstr ""
 
-#: simple-custom-post-order.php:1914
+#: simple-custom-post-order.php:2135
 msgid "Select which taxonomies should have drag-and-drop sorting enabled."
 msgstr ""
 
-#: simple-custom-post-order.php:1928
+#: simple-custom-post-order.php:2149
 msgid "Taxonomies"
 msgstr ""
 
-#: simple-custom-post-order.php:1953
+#: simple-custom-post-order.php:2174
 msgid ""
 "Choose how drag-and-drop reordering behaves. Saving works identically "
 "either way — only the interface differs."
 msgstr ""
 
-#: simple-custom-post-order.php:1975
+#: simple-custom-post-order.php:2196
 msgid ""
 "Modern — smooth animation, touch & keyboard support, save feedback "
 "(recommended)"
 msgstr ""
 
-#: simple-custom-post-order.php:1980
+#: simple-custom-post-order.php:2201
 msgid "Classic — legacy jQuery UI (use only if the modern engine causes a problem)"
 msgstr ""
 
-#: simple-custom-post-order.php:1984
+#: simple-custom-post-order.php:2205
 msgid ""
 "A theme or plugin is currently overriding this choice via the "
 "scpo_use_sortablejs filter, so the option above may not reflect what loads."
 msgstr ""
 
-#: simple-custom-post-order.php:1986
+#: simple-custom-post-order.php:2207
 msgid "Developers can override this per-site with the scpo_use_sortablejs filter."
 msgstr ""
 
-#: simple-custom-post-order.php:2018
+#: simple-custom-post-order.php:2239
 msgid "Show this drag handle when hovering a row"
 msgstr ""
 
-#: simple-custom-post-order.php:2021
+#: simple-custom-post-order.php:2242
 msgid ""
 "Rows stay draggable from anywhere — this just adds the grip icon as a hover "
 "cue. Keyboard users can always reveal the handle by tabbing to a row, so "
@@ -394,103 +447,117 @@ msgid ""
 "engine."
 msgstr ""
 
-#: simple-custom-post-order.php:2031
+#: simple-custom-post-order.php:2252
 msgid "Configure advanced plugin options."
 msgstr ""
 
-#: simple-custom-post-order.php:2046
+#: simple-custom-post-order.php:2267
 msgid "Show all registered post types (including hidden ones)"
 msgstr ""
 
-#: simple-custom-post-order.php:2048
+#: simple-custom-post-order.php:2269
 msgid ""
 "Enable this to see post types that are normally hidden from the admin menu. "
 "For advanced users only."
 msgstr ""
 
-#: simple-custom-post-order.php:2063
+#: simple-custom-post-order.php:2284
+msgid "Let me change an item’s parent by dragging it sideways"
+msgstr ""
+
+#: simple-custom-post-order.php:2286
+msgid ""
+"On hierarchical post types (such as Pages) and taxonomies (such as "
+"Categories), drag a row to the right to nest it under the item above, or to "
+"the left to move it back out — the dashes in front of the title show where "
+"it will land. With the keyboard, grab a row and press the Right or Left "
+"arrow key. Applies to the Modern engine. Developers can override with the "
+"scpo_allow_reparent filter."
+msgstr ""
+
+#: simple-custom-post-order.php:2301
 msgid "Add to the bottom of the order"
 msgstr ""
 
-#: simple-custom-post-order.php:2068
+#: simple-custom-post-order.php:2306
 msgid "Add to the top of the order (default)"
 msgstr ""
 
-#: simple-custom-post-order.php:2070
+#: simple-custom-post-order.php:2308
 msgid ""
 "Where a newly created item lands in the manual order of an enabled post "
 "type."
 msgstr ""
 
-#: simple-custom-post-order.php:2084
+#: simple-custom-post-order.php:2322
 msgid "Show an editable “Order” number column on enabled post-type lists"
 msgstr ""
 
-#: simple-custom-post-order.php:2086
+#: simple-custom-post-order.php:2324
 msgid ""
 "Adds a column where you can type an exact position — handy for jumping an "
 "item across paginated lists. Hide it any time via Screen Options. Off by "
 "default."
 msgstr ""
 
-#: simple-custom-post-order.php:2107
+#: simple-custom-post-order.php:2345
 msgid ""
 "Restrict drag-and-drop reordering to these roles. Leave all unchecked to "
 "allow anyone who can edit posts (default). Developers can override with the "
 "scpo_capability filter."
 msgstr ""
 
-#: simple-custom-post-order.php:2311
+#: simple-custom-post-order.php:2580
 msgid "Order"
 msgstr ""
 
-#: simple-custom-post-order.php:2331
+#: simple-custom-post-order.php:2600
 msgid "You do not have permission to reorder this item."
 msgstr ""
 
-#: simple-custom-post-order.php:2341
+#: simple-custom-post-order.php:2610
 msgid "Set position"
 msgstr ""
 
-#: simple-custom-post-order.php:2363
+#: simple-custom-post-order.php:2632
 msgid "Couldn’t update the order — please try again."
 msgstr ""
 
-#: simple-custom-post-order.php:2364
+#: simple-custom-post-order.php:2633
 msgid ""
 "Your session expired and the order wasn’t saved. Please reload the page and "
 "try again."
 msgstr ""
 
-#: simple-custom-post-order.php:2365
+#: simple-custom-post-order.php:2634
 msgid ""
 "Couldn’t reach the server, so the order wasn’t saved. Check your connection "
 "and try again."
 msgstr ""
 
-#: simple-custom-post-order.php:2392
+#: simple-custom-post-order.php:2661
 msgid "Invalid item."
 msgstr ""
 
-#: simple-custom-post-order.php:2402 simple-custom-post-order.php:2431
+#: simple-custom-post-order.php:2671 simple-custom-post-order.php:2700
 msgid "Invalid position."
 msgstr ""
 
-#: simple-custom-post-order.php:2956
+#: simple-custom-post-order.php:3225
 msgid "No items selected."
 msgstr ""
 
-#: simple-custom-post-order.php:2970 simple-custom-post-order.php:2980
+#: simple-custom-post-order.php:3239 simple-custom-post-order.php:3249
 msgid "Failed to reset items."
 msgstr ""
 
-#: simple-custom-post-order.php:2989
+#: simple-custom-post-order.php:3258
 msgid ""
 "Order values were reset, but sorting could not be disabled. Please try "
 "resetting again."
 msgstr ""
 
-#: simple-custom-post-order.php:2993
+#: simple-custom-post-order.php:3262
 msgid "Items have been reset."
 msgstr ""
 

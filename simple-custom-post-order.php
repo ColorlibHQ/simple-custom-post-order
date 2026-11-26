@@ -459,6 +459,8 @@ class SCPO_Engine {
 			'ajax_url' => $this->get_ajax_url(),
 			'nonce'    => wp_create_nonce( 'scporder_nonce_action' ),
 			'showHandle' => ( ! isset( $options['show_handle'] ) || '0' !== $options['show_handle'] ) ? '1' : '',
+			// Only hierarchical lists have a parent to change.
+			'allowReparent' => ( $this->reparent_enabled() && $this->screen_is_hierarchical() ) ? '1' : '',
 			'i18n'     => [
 				'saving'       => __( 'Saving order…', 'simple-custom-post-order' ),
 				'saved'        => __( 'Order saved', 'simple-custom-post-order' ),
@@ -479,6 +481,16 @@ class SCPO_Engine {
 				/* translators: %1$s: item title. */
 				'atBottom'     => __( '%1$s can’t move down any further.', 'simple-custom-post-order' ),
 				'retry'        => __( 'Retry', 'simple-custom-post-order' ),
+				'parentFailed' => __( 'Couldn’t change the parent — reload to see the saved hierarchy', 'simple-custom-post-order' ),
+				'instructionsNest' => __( 'Use the Left and Right arrow keys to nest or un-nest the item.', 'simple-custom-post-order' ),
+				/* translators: 1: item title, 2: title of its new parent. */
+				'movedUnder'   => __( '%1$s is now a child of %2$s.', 'simple-custom-post-order' ),
+				/* translators: %1$s: item title. */
+				'movedTop'     => __( '%1$s is now at the top level.', 'simple-custom-post-order' ),
+				/* translators: %1$s: item title. */
+				'cantNest'     => __( '%1$s has no item above it to nest under.', 'simple-custom-post-order' ),
+				/* translators: %1$s: item title. */
+				'cantUnnest'   => __( '%1$s is already at the top level.', 'simple-custom-post-order' ),
 				'dismiss'      => __( 'Dismiss', 'simple-custom-post-order' ),
 				'reload'       => __( 'Reload list', 'simple-custom-post-order' ),
 				'notInOrder'   => __( 'Drag and drop is turned off here: this list is not shown in its custom order, so your theme or another plugin is sorting it. Saving would replace the custom order with that order. Remove the code that sorts this admin list (for example a pre_get_posts or get_terms filter) to reorder again.', 'simple-custom-post-order' ),
@@ -1499,6 +1511,25 @@ class SCPO_Engine {
 			}
 		}
 
+		// Optional parent changes ("drag sideways to nest"). Applied only after
+		// every stale-order check above has passed, so a refused save never leaves
+		// a parent changed without its order. Applied before the guarded write
+		// below, so a save hook that touches menu_order can't undo the order
+		// written afterwards; if one did, the guard reports a conflict instead.
+		$moves = $this->parse_parent_moves( $ids );
+		if ( ! empty( $moves ) ) {
+			$parent_result = $is_posts ? $this->apply_post_parent_moves( $moves ) : $this->apply_term_parent_moves( $moves );
+			if ( is_wp_error( $parent_result ) ) {
+				wp_send_json_error(
+					[
+						'message' => $parent_result->get_error_message(),
+						'reload'  => true,
+						'code'    => 'parent',
+					]
+				);
+			}
+		}
+
 		// One batched write for the rows whose value actually changed, with the
 		// object-cache invalidation that raw writes need (see
 		// invalidate_order_cache(); for terms it resolves each term's taxonomy).
@@ -1538,6 +1569,177 @@ class SCPO_Engine {
 			$group_max = null === $group_max ? $order : max( $group_max, $order );
 			$previous = $value;
 		}
+		return true;
+	}
+
+	/**
+	 * Read the `parents[<id>]=<new parent id>` pairs a drag may carry.
+	 *
+	 * Only rows that are part of the submitted order can be re-parented, and
+	 * the whole request is refused when the feature is switched off.
+	 *
+	 * @param int[] $ids Row IDs of the submitted order.
+	 * @return array<int,int> Map of row ID => new parent ID (0 = top level).
+	 */
+	private function parse_parent_moves( array $ids ): array {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce checked in save_dragged_order().
+		if ( ! isset( $_POST['parents'] ) || ! is_array( $_POST['parents'] ) ) {
+			return [];
+		}
+
+		if ( ! $this->reparent_enabled() ) {
+			wp_send_json_error(
+				[
+					'message' => __( 'Changing the parent by dragging is turned off.', 'simple-custom-post-order' ),
+					'code'    => 'parent',
+				],
+				403
+			);
+		}
+
+		$moves = [];
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce checked by the caller; every key and value is validated as a positive integer below.
+		foreach ( wp_unslash( $_POST['parents'] ) as $id => $parent ) {
+			if ( ! is_scalar( $parent ) || ! ctype_digit( (string) $id ) || ! ctype_digit( (string) $parent ) ) {
+				continue;
+			}
+			$id     = (int) $id;
+			$parent = (int) $parent;
+			if ( $id <= 0 ) {
+				continue;
+			}
+			if ( ! in_array( $id, $ids, true ) ) {
+				wp_send_json_error( [ 'message' => __( 'Permission denied.', 'simple-custom-post-order' ) ], 403 );
+			}
+			$moves[ $id ] = $parent;
+		}
+
+		return $moves;
+	}
+
+	/**
+	 * Change the parent of posts, through wp_update_post() so slugs, permalinks,
+	 * caches and every save hook behave exactly as they do in Quick Edit.
+	 *
+	 * Everything is validated before the first write. Moves are then applied
+	 * until none is left; one that would momentarily form a loop (A under B while
+	 * B is still under A) is retried after the others have landed.
+	 *
+	 * The caller has already checked that the user may edit every moved post.
+	 *
+	 * @param array<int,int> $moves Map of post ID => new parent ID.
+	 * @return true|WP_Error
+	 */
+	private function apply_post_parent_moves( array $moves ) {
+		$pending = [];
+
+		foreach ( $moves as $id => $parent ) {
+			$post = get_post( $id );
+			if ( ! $post instanceof WP_Post || ! is_post_type_hierarchical( $post->post_type ) ) {
+				return new WP_Error( 'scpo_parent', __( 'This item cannot have a parent.', 'simple-custom-post-order' ) );
+			}
+			if ( (int) $post->post_parent === $parent ) {
+				continue;
+			}
+			if ( $parent > 0 ) {
+				$new_parent = get_post( $parent );
+				if (
+					! $new_parent instanceof WP_Post
+					|| $new_parent->post_type !== $post->post_type
+					|| in_array( $new_parent->post_status, [ 'trash', 'auto-draft' ], true )
+					|| ! current_user_can( 'read_post', $parent )
+				) {
+					return new WP_Error( 'scpo_parent', __( 'That item cannot be used as a parent.', 'simple-custom-post-order' ) );
+				}
+			}
+			$pending[ $id ] = $parent;
+		}
+
+		while ( ! empty( $pending ) ) {
+			$progress = false;
+
+			foreach ( $pending as $id => $parent ) {
+				// wp_insert_post() would silently drop a looping parent to 0.
+				if ( $parent > 0 && ! wp_check_post_hierarchy_for_loops( $parent, $id ) ) {
+					continue;
+				}
+
+				$updated = wp_update_post(
+					[
+						'ID'          => $id,
+						'post_parent' => $parent,
+					],
+					true
+				);
+				if ( is_wp_error( $updated ) ) {
+					return $updated;
+				}
+				if ( ! $updated || (int) get_post_field( 'post_parent', $id ) !== $parent ) {
+					return new WP_Error( 'scpo_parent', __( 'The parent could not be changed.', 'simple-custom-post-order' ) );
+				}
+
+				unset( $pending[ $id ] );
+				$progress = true;
+			}
+
+			if ( ! $progress ) {
+				return new WP_Error( 'scpo_parent', __( 'An item cannot be placed inside itself.', 'simple-custom-post-order' ) );
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * Term counterpart of apply_post_parent_moves(), through wp_update_term()
+	 *
+	 * @param array<int,int> $moves Map of term ID => new parent term ID.
+	 * @return true|WP_Error
+	 */
+	private function apply_term_parent_moves( array $moves ) {
+		$pending = [];
+
+		foreach ( $moves as $id => $parent ) {
+			$term = get_term( $id );
+			if ( ! $term instanceof WP_Term || ! is_taxonomy_hierarchical( $term->taxonomy ) ) {
+				return new WP_Error( 'scpo_parent', __( 'This item cannot have a parent.', 'simple-custom-post-order' ) );
+			}
+			if ( (int) $term->parent === $parent ) {
+				continue;
+			}
+			if ( ! current_user_can( 'edit_term', $id ) ) {
+				return new WP_Error( 'scpo_parent', __( 'Permission denied.', 'simple-custom-post-order' ) );
+			}
+			if ( $parent > 0 && ! get_term( $parent, $term->taxonomy ) instanceof WP_Term ) {
+				return new WP_Error( 'scpo_parent', __( 'That item cannot be used as a parent.', 'simple-custom-post-order' ) );
+			}
+			$pending[ $id ] = [ $term->taxonomy, $parent ];
+		}
+
+		while ( ! empty( $pending ) ) {
+			$progress = false;
+
+			foreach ( $pending as $id => $move ) {
+				list( $taxonomy, $parent ) = $move;
+
+				if ( $parent > 0 && ! wp_check_term_hierarchy_for_loops( $parent, $id, $taxonomy ) ) {
+					continue;
+				}
+
+				$updated = wp_update_term( $id, $taxonomy, [ 'parent' => $parent ] );
+				if ( is_wp_error( $updated ) ) {
+					return $updated;
+				}
+
+				unset( $pending[ $id ] );
+				$progress = true;
+			}
+
+			if ( ! $progress ) {
+				return new WP_Error( 'scpo_parent', __( 'An item cannot be placed inside itself.', 'simple-custom-post-order' ) );
+			}
+		}
+
 		return true;
 	}
 
@@ -1624,6 +1826,7 @@ class SCPO_Engine {
 					'show_advanced_view' => '',
 					'engine'             => 'sortable',
 					'show_handle'        => '1',
+					'allow_reparent'     => '1',
 					'new_post_position'  => 'top',
 					'allowed_roles'      => [],
 					'order_column'       => '',
@@ -1712,6 +1915,14 @@ class SCPO_Engine {
 		);
 
 		add_settings_field(
+			'scporder_allow_reparent',
+			__( 'Parent / child', 'simple-custom-post-order' ),
+			[ $this, 'render_reparent_field' ],
+			'scporder-settings',
+			'scporder_advanced_section'
+		);
+
+		add_settings_field(
 			'scporder_order_column',
 			__( 'Order column', 'simple-custom-post-order' ),
 			[ $this, 'render_order_column_field' ],
@@ -1751,6 +1962,7 @@ class SCPO_Engine {
 			'show_advanced_view' => '',
 			'engine'             => 'sortable',
 			'show_handle'        => '1',
+			'allow_reparent'     => '1',
 			'new_post_position'  => 'top',
 			'allowed_roles'      => [],
 			'order_column'       => '',
@@ -1783,6 +1995,15 @@ class SCPO_Engine {
 			$sanitized['show_handle'] = ! empty( $input['show_handle'] ) ? '1' : '0';
 		} else {
 			$sanitized['show_handle'] = ( isset( $input['show_handle'] ) && '0' === (string) $input['show_handle'] ) ? '0' : '1';
+		}
+
+		// Change-parent-by-dragging toggle, which defaults to on. Same rule as
+		// show_handle: from the settings form an unchecked box is absent, while
+		// any other writer that omits the key must not switch the feature off.
+		if ( ! empty( $input['_scpo_form'] ) ) {
+			$sanitized['allow_reparent'] = ! empty( $input['allow_reparent'] ) ? '1' : '0';
+		} else {
+			$sanitized['allow_reparent'] = ( isset( $input['allow_reparent'] ) && '0' === (string) $input['allow_reparent'] ) ? '0' : '1';
 		}
 
 		// Where newly created items are placed in the order.
@@ -2049,6 +2270,23 @@ class SCPO_Engine {
 	}
 
 	/**
+	 * Render the "change the parent by dragging" toggle.
+	 *
+	 * @return void
+	 */
+	public function render_reparent_field(): void {
+		$options = get_option( 'scporder_options', [] );
+		$on      = ! isset( $options['allow_reparent'] ) || '0' !== $options['allow_reparent'];
+
+		printf(
+			'<label><input type="checkbox" name="scporder_options[allow_reparent]" value="1" %s /> %s</label>',
+			checked( $on, true, false ),
+			esc_html__( 'Let me change an item’s parent by dragging it sideways', 'simple-custom-post-order' )
+		);
+		echo '<p class="description">' . esc_html__( 'On hierarchical post types (such as Pages) and taxonomies (such as Categories), drag a row to the right to nest it under the item above, or to the left to move it back out — the dashes in front of the title show where it will land. With the keyboard, grab a row and press the Right or Left arrow key. Applies to the Modern engine. Developers can override with the scpo_allow_reparent filter.', 'simple-custom-post-order' ) . '</p>';
+	}
+
+	/**
 	 * Render the "new items placement" choice (#45).
 	 *
 	 * @return void
@@ -2123,6 +2361,37 @@ class SCPO_Engine {
 	public function get_allowed_roles(): array {
 		$o = get_option( 'scporder_options', [] );
 		return ( isset( $o['allowed_roles'] ) && is_array( $o['allowed_roles'] ) ) ? $o['allowed_roles'] : [];
+	}
+
+	/**
+	 * Whether dragging may change an item's parent (setting + filter).
+	 *
+	 * @return bool
+	 */
+	public function reparent_enabled(): bool {
+		$o  = get_option( 'scporder_options', [] );
+		$on = ! isset( $o['allow_reparent'] ) || '0' !== $o['allow_reparent'];
+
+		/**
+		 * Filters whether drag-and-drop may change an item's parent.
+		 *
+		 * @param bool $on Default derived from the saved setting.
+		 */
+		return (bool) apply_filters( 'scpo_allow_reparent', $on );
+	}
+
+	/**
+	 * Whether the list screen being viewed is a hierarchical one (a page-like
+	 * post type or a category-like taxonomy) — the only place a parent exists.
+	 *
+	 * @return bool
+	 */
+	private function screen_is_hierarchical(): bool {
+		$screen = $this->current_sortable_screen();
+		if ( null === $screen ) {
+			return false;
+		}
+		return 'post' === $screen[0] ? is_post_type_hierarchical( $screen[1] ) : is_taxonomy_hierarchical( $screen[1] );
 	}
 
 	public function get_reorder_capability(): string {

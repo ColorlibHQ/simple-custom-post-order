@@ -33,6 +33,7 @@ Easily reorder posts, pages, custom post types, and taxonomies with intuitive dr
 * **Custom Post Types** - Perfect for portfolios, team members, testimonials, products, events, FAQs, services, and more
 * **WooCommerce Products** - Manually sort products in your shop
 * **Taxonomies** - Reorder categories, tags, and custom taxonomies
+* **Parent / Child** - On hierarchical lists (Pages, Categories…), drag a row sideways to nest it under the item above or move it back out; the order and the new parent are saved together
 
 **Intuitive Admin Interface**
 
